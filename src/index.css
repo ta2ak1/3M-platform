@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@import "@digital-go-jp/tailwind-theme-plugin/v4";
+
+@theme {
+  --color-primary: #1d9d8d;
+  --color-primary-strong: #11786f;
+  --color-surface: #f8fafc;
+}
+
+:root {
+  color: #0f172a;
+  background: #f8fafc;
+  font-family:
+    "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+}
+
+html {
+  background: #f8fafc;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: linear-gradient(180deg, #f8fafc 0%, #edf6f5 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}

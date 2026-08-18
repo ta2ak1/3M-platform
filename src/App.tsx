@@ -1,0 +1,222 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { PostForm } from "./components/PostForm";
+import { PostMap } from "./components/PostMap";
+import { fetchAdminPlaces, fetchPosts, submitPost } from "./lib/api";
+import type { AdminPlace, CommunityPost } from "./types";
+
+const DEFAULT_LOCATION = { lat: 35.681236, lng: 139.767125 };
+
+function App() {
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [adminPlaces, setAdminPlaces] = useState<AdminPlace[]>([]);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [formLocation, setFormLocation] = useState(DEFAULT_LOCATION);
+  const [seedCount, setSeedCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const selectedPost = useMemo(
+    () => posts.find((post) => post.id === selectedPostId) ?? null,
+    [posts, selectedPostId],
+  );
+
+  const loadPosts = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [nextPosts, nextAdminPlaces, seedResponse] = await Promise.all([
+        fetchPosts(),
+        fetchAdminPlaces(),
+        fetch("/api/seed", { headers: { Accept: "application/json" } }),
+      ]);
+
+      setPosts(nextPosts);
+      setAdminPlaces(nextAdminPlaces);
+      setErrorMessage(null);
+
+      if (seedResponse.ok) {
+        const payload = (await seedResponse.json()) as {
+          count?: number;
+          places?: AdminPlace[];
+        };
+        setSeedCount(
+          payload.count ?? payload.places?.length ?? nextAdminPlaces.length,
+        );
+      }
+    } catch {
+      setErrorMessage(
+        "投稿データの取得に失敗しました。少し時間を置いて再読み込みしてください。",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPosts();
+  }, [loadPosts]);
+
+  const handleLocationPick = useCallback(
+    (location: { lat: number; lng: number }) => {
+      setFormLocation(location);
+      setSelectedPostId(null);
+    },
+    [],
+  );
+
+  const handleSelectPost = useCallback((post: CommunityPost | null) => {
+    setSelectedPostId(post?.id ?? null);
+    if (post) {
+      setFormLocation({ lat: post.lat, lng: post.lng });
+    }
+  }, []);
+
+  const handleSubmit = useCallback(async (formData: FormData) => {
+    const createdPost = await submitPost(formData);
+    setPosts((current) => [createdPost, ...current]);
+    setSelectedPostId(createdPost.id);
+    setFormLocation({ lat: createdPost.lat, lng: createdPost.lng });
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      <header className="border-b border-slate-200 bg-primary px-4 py-5 text-white shadow-lg shadow-slate-300/40">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-100">
+                3M Platform
+              </p>
+              <h1 className="mt-2 text-2xl font-bold md:text-4xl">
+                地域のいいね！
+              </h1>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-emerald-50">
+              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
+                行政シード {seedCount}件
+              </span>
+              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
+                市民投稿 {posts.length}件
+              </span>
+            </div>
+          </div>
+          <p className="mt-3 max-w-3xl text-sm text-emerald-50 md:text-base">
+            行政のオープンデータと市民の発見を結び、地域の魅力を写真と一言で共有するマップサービスです。
+          </p>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 xl:px-8">
+        {errorMessage ? (
+          <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {errorMessage}
+          </div>
+        ) : null}
+
+        <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <aside className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">最近の投稿</h2>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                {posts.length}件
+              </span>
+            </div>
+
+            <div className="flex-1 space-y-3">
+              {isLoading ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  読み込み中です…
+                </div>
+              ) : posts.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  まだ投稿はありません。最初の魅力を共有しましょう。
+                </div>
+              ) : (
+                posts.map((post) => (
+                  <button
+                    key={post.id}
+                    type="button"
+                    onClick={() => handleSelectPost(post)}
+                    className={`w-full overflow-hidden rounded-2xl border text-left transition duration-200 ${
+                      selectedPost?.id === post.id
+                        ? "border-primary bg-emerald-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex gap-3 p-3">
+                      <img
+                        src={post.photoUrl}
+                        alt={post.title}
+                        className="h-20 w-20 rounded-xl object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-slate-900">
+                          {post.title}
+                        </p>
+                        <p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-600">
+                          {post.summary}
+                        </p>
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          {new Date(post.createdAt).toLocaleDateString(
+                            "ja-JP",
+                            {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            },
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </aside>
+
+          <section className="space-y-5">
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm shadow-slate-200/60">
+              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                <h2 className="text-lg font-bold text-slate-900">マップ</h2>
+                <span className="text-xs font-medium text-slate-500">
+                  クリックで投稿位置を指定できます
+                </span>
+              </div>
+              <div className="h-[540px] w-full">
+                <PostMap
+                  posts={posts}
+                  adminPlaces={adminPlaces}
+                  selectedPostId={selectedPostId}
+                  onSelectPost={handleSelectPost}
+                  onLocationPick={handleLocationPick}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    投稿フォーム
+                  </p>
+                  <h2 className="mt-1 text-lg font-bold text-slate-900">
+                    この場所を紹介する
+                  </h2>
+                </div>
+                <div className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                  {formLocation.lat.toFixed(5)}, {formLocation.lng.toFixed(5)}
+                </div>
+              </div>
+
+              <PostForm
+                onSubmit={handleSubmit}
+                defaultLocation={formLocation}
+              />
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export default App;
