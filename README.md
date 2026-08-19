@@ -86,6 +86,26 @@ npx wrangler r2 bucket create 3m-platform-photos
 
 `wrangler.jsonc` では公開に必要な設定だけを管理し、実際の機密情報は Cloudflare 側の環境変数や Secrets Store で保持してください。
 
+### Cloudflare Secrets への移行手順
+
+1. 秘密にしたい値を洗い出します。
+   - 例: `CLOUDFLARE_API_TOKEN`
+   - 例: 外部連携用トークン、今後追加する API キー
+2. Cloudflare に登録します。
+
+```bash
+npx wrangler secret put CLOUDFLARE_API_TOKEN
+```
+
+3. ローカル専用の値は `.dev.vars` または `.env` に置き、Git には含めません。
+4. 共有してよい値だけを `wrangler.jsonc` の `vars` に残します。
+
+### このアプリでの扱い
+
+- `CLOUDFLARE_API_TOKEN` は Secrets Store に置く
+- `BUCKET_PUBLIC_URL` は公開 URL なので `vars` のままでよい
+- `CLOUDFLARE_ACCOUNT_ID` や `AI_GATEWAY_*` は機密情報ではないが、公開したくない場合はリポジトリから外し、Cloudflare 側で管理する
+
 ## ローカル開発
 
 ```bash
