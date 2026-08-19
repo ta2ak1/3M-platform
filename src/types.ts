@@ -7,6 +7,8 @@ export type CommunityPost = {
   photoUrl: string;
   createdAt: string;
   tags?: string[];
+  aiTags?: string[];
+  humanTags?: string[];
 };
 
 export type AdminPlace = {

@@ -43,7 +43,9 @@
 │   └── geojson.d.ts
 ├── migrations/
 │   ├── 0001_create_community_posts.sql
-│   └── 0002_create_admin_places.sql
+│   ├── 0002_create_admin_places.sql
+│   ├── 0003_add_tags_to_community_posts.sql
+│   └── 0004_add_ai_and_human_tags_to_community_posts.sql
 ├── package.json
 ├── vite.config.ts
 ├── wrangler.jsonc
@@ -135,6 +137,33 @@ npm run deploy
 - Worker 起動時にこの GeoJSON を読み込む
 - `admin_places` テーブルへ初期データを投入
 - 地図上に管理データとユーザー投稿を重ねて表示
+
+## 投稿フロー
+
+市民投稿は軽量なヒューマンインザループで運用します。
+
+1. 投稿者がタイトル、一言、写真を入力して AI 判定を実行する
+2. AI が画像安全性とタグ候補を返す
+3. 投稿者が候補タグを編集し、最終タグを確定する
+4. 投稿者が内容を確認してから公開する
+
+このアプリでは、AI のタグ候補をそのまま自動保存せず、投稿者が最終判断する前提にしています。
+
+## タグ保存モデル
+
+`community_posts` テーブルではタグを 3 つの列で管理します。
+
+- `ai_tags`: AI が提案したタグ候補
+- `human_tags`: 投稿者が最終的に確定したタグ
+- `tags`: 後方互換のための最終タグ（`human_tags` と同じ値）
+
+これにより、AI 提案と人の最終判断を分けて追跡できます。
+
+## AI 判定の可用性設計
+
+AI サービスが一時的に 5xx エラーを返した場合は投稿を即ブロックせず、
+`requiresReview: true` と `warnings` を返して人による最終確認フローを継続します。
+安全性判定そのものが明確に unsafe の場合のみ投稿を停止します。
 
 ## 主要 API
 

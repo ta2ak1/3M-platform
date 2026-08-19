@@ -96,6 +96,21 @@ export async function submitPost(formData: FormData): Promise<CommunityPost> {
           "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=900&q=80",
       ),
       createdAt: new Date().toISOString(),
+      tags: (() => {
+        const rawTags = formData.get("tags");
+        if (typeof rawTags !== "string") {
+          return [];
+        }
+
+        try {
+          const parsed = JSON.parse(rawTags) as unknown;
+          return Array.isArray(parsed)
+            ? parsed.filter((tag): tag is string => typeof tag === "string")
+            : [];
+        } catch {
+          return [];
+        }
+      })(),
     };
   }
 

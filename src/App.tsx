@@ -20,6 +20,9 @@ function App() {
     [posts, selectedPostId],
   );
 
+  const selectedAiTags = selectedPost?.aiTags ?? [];
+  const selectedHumanTags = selectedPost?.humanTags ?? selectedPost?.tags ?? [];
+
   const loadPosts = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -155,6 +158,23 @@ function App() {
                         <p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-600">
                           {post.summary}
                         </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {(post.humanTags ?? post.tags ?? [])
+                            .slice(0, 3)
+                            .map((tag) => (
+                              <span
+                                key={`${post.id}-${tag}`}
+                                className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          {(post.aiTags ?? []).length > 0 ? (
+                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              AI候補 {(post.aiTags ?? []).length}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-2 text-[11px] text-slate-400">
                           {new Date(post.createdAt).toLocaleDateString(
                             "ja-JP",
@@ -169,6 +189,83 @@ function App() {
                     </div>
                   </button>
                 ))
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-bold text-slate-900">投稿詳細</h3>
+                {selectedPost ? (
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">
+                    選択中
+                  </span>
+                ) : null}
+              </div>
+
+              {selectedPost ? (
+                <div className="mt-3 space-y-3">
+                  <img
+                    src={selectedPost.photoUrl}
+                    alt={selectedPost.title}
+                    className="h-36 w-full rounded-xl object-cover"
+                  />
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">
+                      {selectedPost.title}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                      {selectedPost.summary}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      人が修正した最終タグ
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedHumanTags.length > 0 ? (
+                        selectedHumanTags.map((tag) => (
+                          <span
+                            key={`human-${selectedPost.id}-${tag}`}
+                            className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary"
+                          >
+                            #{tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-slate-500">
+                          まだ最終タグがありません。
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      AI候補
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedAiTags.length > 0 ? (
+                        selectedAiTags.map((tag) => (
+                          <span
+                            key={`ai-${selectedPost.id}-${tag}`}
+                            className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
+                          >
+                            #{tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-slate-500">
+                          まだAI候補がありません。
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-slate-600">
+                  投稿を選ぶと、AI候補と人が確定した最終タグを確認できます。
+                </p>
               )}
             </div>
           </aside>

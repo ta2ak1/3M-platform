@@ -34,6 +34,8 @@ type PostRow = {
   photoUrl: string;
   createdAt: string;
   tags?: string;
+  aiTags?: string;
+  humanTags?: string;
 };
 
 type GeoJsonSeedFeature = {
@@ -130,7 +132,7 @@ async function readPostsFromD1(
 
   const results = await db
     .prepare(
-      "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, tags FROM community_posts ORDER BY created_at DESC LIMIT 50",
+      "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, tags, ai_tags AS aiTags, human_tags AS humanTags FROM community_posts ORDER BY created_at DESC LIMIT 50",
     )
     .all<PostRow>();
 
@@ -142,7 +144,9 @@ async function readPostsFromD1(
     lng: Number(row.lng),
     photoUrl: row.photoUrl,
     createdAt: row.createdAt,
-    tags: safeParseTags(row.tags),
+    tags: safeParseTags(row.humanTags ?? row.tags),
+    aiTags: safeParseTags(row.aiTags),
+    humanTags: safeParseTags(row.humanTags ?? row.tags),
   }));
 }
 
@@ -168,7 +172,7 @@ async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
 
   await db
     .prepare(
-      "INSERT INTO community_posts (id, title, summary, lat, lng, photo_url, created_at, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO community_posts (id, title, summary, lat, lng, photo_url, created_at, tags, ai_tags, human_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       post.id,
@@ -179,6 +183,8 @@ async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
       post.photoUrl,
       post.createdAt,
       JSON.stringify(post.tags ?? []),
+      JSON.stringify(post.aiTags ?? []),
+      JSON.stringify(post.humanTags ?? post.tags ?? []),
     )
     .run();
 }
@@ -471,6 +477,20 @@ async function resizeImageForAi(
 
 let visionModelAgreementAccepted = false;
 
+function resolveGatewayName(env: CloudflareEnv): string | undefined {
+  const rawName = env.AI_GATEWAY_NAME?.trim();
+  if (!rawName) {
+    return undefined;
+  }
+
+  // Treat template placeholders as unset to avoid breaking production calls.
+  if (rawName.toUpperCase().startsWith("YOUR_")) {
+    return undefined;
+  }
+
+  return rawName;
+}
+
 async function ensureVisionModelAccepted(env: CloudflareEnv): Promise<void> {
   if (visionModelAgreementAccepted) {
     return;
@@ -480,7 +500,7 @@ async function ensureVisionModelAccepted(env: CloudflareEnv): Promise<void> {
     throw new Error("AI binding is not configured");
   }
 
-  const gatewayName = env.AI_GATEWAY_NAME?.trim();
+  const gatewayName = resolveGatewayName(env);
   const payload = {
     prompt: "agree",
   };
@@ -517,7 +537,7 @@ async function runVisionModel(
     throw new Error("AI binding is not configured");
   }
 
-  const gatewayName = env.AI_GATEWAY_NAME?.trim();
+  const gatewayName = resolveGatewayName(env);
 
   if (gatewayName) {
     return await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", payload, {
@@ -558,7 +578,7 @@ async function runModerationCheck(
   imageBuffer: ArrayBuffer,
   title: string,
   comment: string,
-): Promise<{ safe: boolean; reason?: string }> {
+): Promise<{ safe: boolean; reason?: string; serviceError?: boolean }> {
   try {
     const constrainedImage = await resizeImageForAi(imageBuffer, 1200, 0.7);
     const imageDataUrl = arrayBufferToBase64DataUrl(
@@ -629,9 +649,10 @@ async function runModerationCheck(
     }
 
     return {
-      safe: false,
-      reason:
-        "AI 判定サービスが応答できませんでした。画像を別のものにして再度お試しください。",
+      // Fail-open on transient AI service failures; user performs final human review.
+      safe: true,
+      serviceError: true,
+      reason: `AI 判定サービスが応答できませんでした（${message}）。画像を別のものにして再度お試しください。`,
     };
   }
 }
@@ -774,13 +795,19 @@ app.post("/api/posts/precheck", async (c) => {
   }
 
   const tags = await runTagSuggestion(c.env, imageBuffer, title, comment);
+  const warnings = moderation.serviceError
+    ? [
+        moderation.reason ??
+          "AI 判定サービスが一時的に不安定です。内容を確認して投稿してください。",
+      ]
+    : [];
 
   return c.json({
     ok: true,
     safe: true,
     tags,
-    warnings: [],
-    requiresReview: false,
+    warnings,
+    requiresReview: moderation.serviceError === true,
   });
 });
 
@@ -820,21 +847,28 @@ app.post("/api/posts", async (c) => {
     }
   }
 
-  const rawTags = body.tags;
-  const tags = Array.isArray(rawTags)
-    ? rawTags.filter((tag): tag is string => typeof tag === "string")
-    : typeof rawTags === "string"
-      ? (() => {
-          try {
-            const parsed = JSON.parse(rawTags) as unknown;
-            return Array.isArray(parsed)
-              ? parsed.filter((tag): tag is string => typeof tag === "string")
-              : [];
-          } catch {
-            return [];
-          }
-        })()
-      : [];
+  const parseTagField = (value: unknown): string[] => {
+    if (Array.isArray(value)) {
+      return value.filter((tag): tag is string => typeof tag === "string");
+    }
+
+    if (typeof value !== "string") {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return Array.isArray(parsed)
+        ? parsed.filter((tag): tag is string => typeof tag === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const aiTags = parseTagField(body.aiTags ?? body.tags);
+  const humanTags = parseTagField(body.humanTags ?? body.tags);
+  const tags = humanTags;
 
   const createdAt = new Date().toISOString();
   const post: CommunityPost = {
@@ -846,6 +880,8 @@ app.post("/api/posts", async (c) => {
     photoUrl,
     createdAt,
     tags,
+    aiTags,
+    humanTags,
   };
 
   const existing = getStoredPosts();
