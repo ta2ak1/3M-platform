@@ -6,6 +6,7 @@ export type CommunityPost = {
   lng: number;
   photoUrl: string;
   createdAt: string;
+  tags?: string[];
 };
 
 export type AdminPlace = {

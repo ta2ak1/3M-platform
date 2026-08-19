@@ -7,12 +7,21 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Local env and secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+
+# Generated / local runtime folders
 node_modules
 dist
 dist-ssr
 .wrangler
 *.local
 *.tsbuildinfo
+worker-configuration.d.ts
 
 # Editor directories and files
 .vscode/*

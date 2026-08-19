@@ -3,6 +3,9 @@
   "name": "3m-platform",
   "compatibility_date": "2026-08-14",
   "main": "./worker/index.ts",
+  "ai": {
+    "binding": "AI",
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -19,6 +22,9 @@
   ],
   "vars": {
     "BUCKET_PUBLIC_URL": "https://3m-platform-photos.r2.dev",
+    "CLOUDFLARE_ACCOUNT_ID": "YOUR_CLOUDFLARE_ACCOUNT_ID",
+    "AI_GATEWAY_ACCOUNT_ID": "YOUR_AI_GATEWAY_ACCOUNT_ID",
+    "AI_GATEWAY_NAME": "YOUR_AI_GATEWAY_NAME",
   },
   "assets": {
     "directory": "./dist",

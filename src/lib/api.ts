@@ -37,6 +37,39 @@ export async function fetchPosts(): Promise<CommunityPost[]> {
   return payload.posts ?? mockPosts;
 }
 
+export async function precheckPost(formData: FormData): Promise<{
+  ok: boolean;
+  tags: string[];
+  message?: string;
+}> {
+  const response = await fetch(`${API_BASE}/posts/precheck`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    tags?: string[];
+    message?: string;
+    reason?: string;
+    error?: string;
+  };
+
+  if (!response.ok || !payload.ok) {
+    return {
+      ok: false,
+      tags: [],
+      message:
+        payload.reason ?? payload.message ?? "画像の確認に失敗しました。",
+    };
+  }
+
+  return {
+    ok: true,
+    tags: Array.isArray(payload.tags) ? payload.tags : [],
+  };
+}
+
 export async function submitPost(formData: FormData): Promise<CommunityPost> {
   const response = await fetch(`${API_BASE}/posts`, {
     method: "POST",
