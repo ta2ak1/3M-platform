@@ -1,5 +1,58 @@
 import { useEffect, useMemo, useState } from "react";
+import exifr from "exifr";
 import { precheckPost } from "../lib/api";
+
+type LocationSource = "exif" | "device" | "fallback";
+
+async function readExifLocation(
+  file: File,
+): Promise<{ latitude: number; longitude: number; capturedAt?: string } | null> {
+  try {
+    const result = (await exifr.parse(file, {
+      gps: true,
+      pick: ["latitude", "longitude", "DateTimeOriginal"],
+    })) as
+      | { latitude?: number; longitude?: number; DateTimeOriginal?: Date }
+      | undefined;
+
+    if (!result || result.latitude == null || result.longitude == null) {
+      return null;
+    }
+
+    return {
+      latitude: result.latitude,
+      longitude: result.longitude,
+      capturedAt:
+        result.DateTimeOriginal instanceof Date
+          ? result.DateTimeOriginal.toISOString()
+          : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getDeviceLocation(): Promise<{
+  latitude: number;
+  longitude: number;
+} | null> {
+  if (!navigator.geolocation) {
+    return Promise.resolve(null);
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      () => resolve(null),
+      { timeout: 5000, enableHighAccuracy: false },
+    );
+  });
+}
 
 async function createAiSafePhoto(file: File): Promise<File> {
   const imageElement = await new Promise<HTMLImageElement>(
@@ -92,6 +145,12 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationSource, setLocationSource] =
+    useState<LocationSource>("fallback");
+  const [capturedAt, setCapturedAt] = useState<string | undefined>(undefined);
+  const [resolvedLat, setResolvedLat] = useState<number | undefined>(undefined);
+  const [resolvedLng, setResolvedLng] = useState<number | undefined>(undefined);
   const [reviewStep, setReviewStep] = useState<"editing" | "reviewing">(
     "editing",
   );
@@ -197,15 +256,22 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
     setErrorMessage("");
 
     try {
+      const lat = resolvedLat ?? defaultLocation?.lat ?? 35.681236;
+      const lng = resolvedLng ?? defaultLocation?.lng ?? 139.767125;
+
       const formData = new FormData();
       formData.set("title", title.trim());
       formData.set("summary", summary.trim());
-      formData.set("lat", String(defaultLocation?.lat ?? 35.681236));
-      formData.set("lng", String(defaultLocation?.lng ?? 139.767125));
+      formData.set("lat", String(lat));
+      formData.set("lng", String(lng));
       formData.set("photo", photoFile);
       formData.set("aiTags", JSON.stringify(suggestedTags));
       formData.set("humanTags", JSON.stringify(finalTags));
       formData.set("tags", JSON.stringify(finalTags));
+      if (capturedAt) {
+        formData.set("capturedAt", capturedAt);
+      }
+      formData.set("locationSource", locationSource);
 
       await onSubmit(formData);
 
@@ -293,16 +359,75 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
           id="post-photo"
           type="file"
           accept="image/*"
-          onChange={(event) => {
-            setPhotoFile(event.target.files?.[0] ?? null);
+          onChange={async (event) => {
+            const file = event.target.files?.[0] ?? null;
+            setPhotoFile(file);
             if (reviewStep === "reviewing") {
               resetReviewState(
                 "写真を変更したので、AI確認をやり直してください。",
               );
             }
+            if (!file) {
+              setLocationSource("fallback");
+              setCapturedAt(undefined);
+              setResolvedLat(undefined);
+              setResolvedLng(undefined);
+              return;
+            }
+
+            setIsLocating(true);
+            try {
+              const exif = await readExifLocation(file);
+              if (exif) {
+                setResolvedLat(exif.latitude);
+                setResolvedLng(exif.longitude);
+                setCapturedAt(exif.capturedAt ?? new Date().toISOString());
+                setLocationSource("exif");
+                return;
+              }
+
+              const device = await getDeviceLocation();
+              if (device) {
+                setResolvedLat(device.latitude);
+                setResolvedLng(device.longitude);
+                setCapturedAt(new Date().toISOString());
+                setLocationSource("device");
+                return;
+              }
+
+              setCapturedAt(new Date().toISOString());
+              setLocationSource("fallback");
+              setResolvedLat(undefined);
+              setResolvedLng(undefined);
+            } finally {
+              setIsLocating(false);
+            }
           }}
           className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
         />
+        {isLocating && (
+          <p className="mt-1 text-xs text-slate-500">位置情報を取得中...</p>
+        )}
+        {!isLocating && photoFile && (
+          <p className="mt-1 text-xs text-slate-500">
+            取得元：
+            <span
+              className={`ml-1 inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${
+                locationSource === "exif"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : locationSource === "device"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {locationSource === "exif"
+                ? "EXIF"
+                : locationSource === "device"
+                  ? "デバイス位置"
+                  : "デフォルト"}
+            </span>
+          </p>
+        )}
       </div>
 
       {reviewStep === "reviewing" ? (
