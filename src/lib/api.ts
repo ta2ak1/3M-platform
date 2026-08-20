@@ -22,8 +22,26 @@ export async function fetchAdminPlaces(): Promise<AdminPlace[]> {
   return payload.places ?? [];
 }
 
-export async function fetchPosts(): Promise<CommunityPost[]> {
-  const response = await fetch(`${API_BASE}/posts`, {
+export type BboxQuery = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+};
+
+export async function fetchPosts(bbox?: BboxQuery): Promise<CommunityPost[]> {
+  let url = `${API_BASE}/posts`;
+  if (bbox) {
+    const params = new URLSearchParams({
+      minLat: String(bbox.minLat),
+      maxLat: String(bbox.maxLat),
+      minLng: String(bbox.minLng),
+      maxLng: String(bbox.maxLng),
+    });
+    url = `${url}?${params.toString()}`;
+  }
+
+  const response = await fetch(url, {
     headers: {
       Accept: "application/json",
     },

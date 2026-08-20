@@ -9,6 +9,12 @@ interface PostMapProps {
   selectedPostId?: string | null;
   onSelectPost?: (post: CommunityPost | null) => void;
   onLocationPick?: (location: { lat: number; lng: number }) => void;
+  onBoundsChange?: (bbox: {
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+  }) => void;
 }
 
 async function loadLeaflet(): Promise<typeof Leaflet> {
@@ -23,6 +29,7 @@ export function PostMap({
   selectedPostId,
   onSelectPost,
   onLocationPick,
+  onBoundsChange,
 }: PostMapProps) {
   const mapRef = useRef<Leaflet.Map | null>(null);
   const markerLayerRef = useRef<Leaflet.LayerGroup | null>(null);
@@ -82,6 +89,30 @@ export function PostMap({
         const { lat, lng } = event.latlng;
         onLocationPick?.({ lat, lng });
       });
+
+      let boundsTimer: ReturnType<typeof setTimeout> | null = null;
+      const emitBounds = () => {
+        const b = map.getBounds();
+        onBoundsChange?.({
+          minLat: b.getSouth(),
+          maxLat: b.getNorth(),
+          minLng: b.getWest(),
+          maxLng: b.getEast(),
+        });
+      };
+
+      map.on("moveend", () => {
+        if (boundsTimer !== null) {
+          clearTimeout(boundsTimer);
+        }
+        boundsTimer = setTimeout(() => {
+          emitBounds();
+          boundsTimer = null;
+        }, 500);
+      });
+
+      // 初期ビューポートを通知
+      emitBounds();
     })();
 
     return () => {

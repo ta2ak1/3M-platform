@@ -127,18 +127,38 @@ function getStoredPosts(): CommunityPost[] {
   return [...(inMemoryStore.__community_posts__ ?? [])];
 }
 
+type BboxParams = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+};
+
 async function readPostsFromD1(
   db: D1Database | undefined,
+  bbox?: BboxParams,
+  limit = 100,
 ): Promise<CommunityPost[]> {
   if (!db) {
     return [];
   }
 
-  const results = await db
-    .prepare(
-      "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, captured_at AS capturedAt, location_source AS locationSource, tags, ai_tags AS aiTags, human_tags AS humanTags FROM community_posts ORDER BY created_at DESC LIMIT 50",
-    )
-    .all<PostRow>();
+  const safeLimit = Math.min(Math.max(1, limit), 200);
+
+  const SELECT =
+    "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, captured_at AS capturedAt, location_source AS locationSource, tags, ai_tags AS aiTags, human_tags AS humanTags FROM community_posts";
+
+  const results =
+    bbox != null
+      ? await db
+          .prepare(
+            `${SELECT} WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ? ORDER BY created_at DESC LIMIT ?`,
+          )
+          .bind(bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng, safeLimit)
+          .all<PostRow>()
+      : await db
+          .prepare(`${SELECT} ORDER BY created_at DESC LIMIT 50`)
+          .all<PostRow>();
 
   return (results.results ?? []).map((row) => ({
     id: row.id,
@@ -775,7 +795,28 @@ app.get("/api/seed", async (c) => {
 });
 
 app.get("/api/posts", async (c) => {
-  const dbPosts = await readPostsFromD1(c.env.DB);
+  const q = c.req.query();
+  const minLat = parseFloat(q.minLat ?? "");
+  const maxLat = parseFloat(q.maxLat ?? "");
+  const minLng = parseFloat(q.minLng ?? "");
+  const maxLng = parseFloat(q.maxLng ?? "");
+  const limit = parseInt(q.limit ?? "100", 10);
+
+  const bbox =
+    Number.isFinite(minLat) &&
+    Number.isFinite(maxLat) &&
+    Number.isFinite(minLng) &&
+    Number.isFinite(maxLng) &&
+    minLat < maxLat &&
+    minLng < maxLng
+      ? { minLat, maxLat, minLng, maxLng }
+      : undefined;
+
+  const dbPosts = await readPostsFromD1(
+    c.env.DB,
+    bbox,
+    Number.isFinite(limit) ? limit : 100,
+  );
   if (dbPosts.length > 0) {
     return c.json({ posts: dbPosts });
   }

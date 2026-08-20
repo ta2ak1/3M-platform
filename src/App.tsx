@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PostForm } from "./components/PostForm";
 import { PostMap } from "./components/PostMap";
 import { fetchAdminPlaces, fetchPosts, submitPost } from "./lib/api";
+import type { BboxQuery } from "./lib/api";
 import type { AdminPlace, CommunityPost } from "./types";
 
 const DEFAULT_LOCATION = { lat: 35.681236, lng: 139.767125 };
@@ -14,6 +15,8 @@ function App() {
   const [seedCount, setSeedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mapBbox, setMapBbox] = useState<BboxQuery | null>(null);
+  const mapBboxRef = useRef<BboxQuery | null>(null);
 
   const selectedPost = useMemo(
     () => posts.find((post) => post.id === selectedPostId) ?? null,
@@ -23,11 +26,11 @@ function App() {
   const selectedAiTags = selectedPost?.aiTags ?? [];
   const selectedHumanTags = selectedPost?.humanTags ?? selectedPost?.tags ?? [];
 
-  const loadPosts = useCallback(async () => {
+  const loadPosts = useCallback(async (bbox?: BboxQuery | null) => {
     setIsLoading(true);
     try {
       const [nextPosts, nextAdminPlaces, seedResponse] = await Promise.all([
-        fetchPosts(),
+        fetchPosts(bbox ?? undefined),
         fetchAdminPlaces(),
         fetch("/api/seed", { headers: { Accept: "application/json" } }),
       ]);
@@ -54,9 +57,20 @@ function App() {
     }
   }, []);
 
+  const handleBoundsChange = useCallback(
+    (bbox: BboxQuery) => {
+      mapBboxRef.current = bbox;
+      setMapBbox(bbox);
+    },
+    [],
+  );
+
+  // mapBbox が変化したら再取得（初期表示時を含む）
   useEffect(() => {
-    void loadPosts();
-  }, [loadPosts]);
+    if (mapBbox) {
+      void loadPosts(mapBbox);
+    }
+  }, [mapBbox, loadPosts]);
 
   const handleLocationPick = useCallback(
     (location: { lat: number; lng: number }) => {
@@ -285,6 +299,7 @@ function App() {
                   selectedPostId={selectedPostId}
                   onSelectPost={handleSelectPost}
                   onLocationPick={handleLocationPick}
+                  onBoundsChange={handleBoundsChange}
                 />
               </div>
             </div>
