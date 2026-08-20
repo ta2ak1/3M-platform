@@ -36,6 +36,10 @@ export function PostMap({
   const markerMapRef = useRef<Map<string, Leaflet.Marker>>(new Map());
   const adminMarkerLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  // fitBounds による moveend で再取得ループを防ぐ
+  const suppressMoveendRef = useRef(false);
+  // 初回表示時のみ fitBounds を呼び出す
+  const hasFittedBoundsRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
 
   // リサイズ監視処理
@@ -102,6 +106,8 @@ export function PostMap({
       };
 
       map.on("moveend", () => {
+        // fitBounds によるプログラム的移動はスキップ
+        if (suppressMoveendRef.current) return;
         if (boundsTimer !== null) {
           clearTimeout(boundsTimer);
         }
@@ -111,7 +117,7 @@ export function PostMap({
         }, 500);
       });
 
-      // 初期ビューポートを通知
+      // 初期ビューポートを通知（初回ロード用）
       emitBounds();
     })();
 
@@ -199,9 +205,15 @@ export function PostMap({
       ),
     ];
 
-    if (allPoints.length > 0) {
+    // 初回のみ自動フィット（以降はユーザー操作に委ねる）
+    if (!hasFittedBoundsRef.current && allPoints.length > 0) {
+      hasFittedBoundsRef.current = true;
+      suppressMoveendRef.current = true;
       const bounds = (window as any).L.latLngBounds(allPoints);
       map.fitBounds(bounds.pad(0.3));
+      map.once("moveend", () => {
+        suppressMoveendRef.current = false;
+      });
     }
   }, [normalizedPosts, normalizedAdminPlaces, isReady, onSelectPost]);
 
