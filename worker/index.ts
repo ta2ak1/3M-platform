@@ -33,10 +33,14 @@ type PostRow = {
   lng: number;
   photoUrl: string;
   createdAt: string;
+  capturedAt?: string;
+  locationSource?: string;
   tags?: string;
   aiTags?: string;
   humanTags?: string;
 };
+
+type LocationSource = "exif" | "device" | "manual" | "fallback";
 
 type GeoJsonSeedFeature = {
   type?: string;
@@ -132,7 +136,7 @@ async function readPostsFromD1(
 
   const results = await db
     .prepare(
-      "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, tags, ai_tags AS aiTags, human_tags AS humanTags FROM community_posts ORDER BY created_at DESC LIMIT 50",
+      "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, captured_at AS capturedAt, location_source AS locationSource, tags, ai_tags AS aiTags, human_tags AS humanTags FROM community_posts ORDER BY created_at DESC LIMIT 50",
     )
     .all<PostRow>();
 
@@ -144,10 +148,34 @@ async function readPostsFromD1(
     lng: Number(row.lng),
     photoUrl: row.photoUrl,
     createdAt: row.createdAt,
+    capturedAt: row.capturedAt,
+    locationSource: parseLocationSource(row.locationSource),
     tags: safeParseTags(row.humanTags ?? row.tags),
     aiTags: safeParseTags(row.aiTags),
     humanTags: safeParseTags(row.humanTags ?? row.tags),
   }));
+}
+
+function parseLocationSource(value: unknown): LocationSource {
+  return value === "exif" ||
+    value === "device" ||
+    value === "manual" ||
+    value === "fallback"
+    ? value
+    : "fallback";
+}
+
+function normalizeCapturedAt(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date.toISOString();
 }
 
 function safeParseTags(value?: string): string[] {
@@ -172,7 +200,7 @@ async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
 
   await db
     .prepare(
-      "INSERT INTO community_posts (id, title, summary, lat, lng, photo_url, created_at, tags, ai_tags, human_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO community_posts (id, title, summary, lat, lng, photo_url, created_at, captured_at, location_source, tags, ai_tags, human_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       post.id,
@@ -182,6 +210,8 @@ async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
       post.lng,
       post.photoUrl,
       post.createdAt,
+      post.capturedAt ?? null,
+      post.locationSource ?? "fallback",
       JSON.stringify(post.tags ?? []),
       JSON.stringify(post.aiTags ?? []),
       JSON.stringify(post.humanTags ?? post.tags ?? []),
@@ -869,6 +899,8 @@ app.post("/api/posts", async (c) => {
   const aiTags = parseTagField(body.aiTags ?? body.tags);
   const humanTags = parseTagField(body.humanTags ?? body.tags);
   const tags = humanTags;
+  const capturedAt = normalizeCapturedAt(body.capturedAt);
+  const locationSource = parseLocationSource(body.locationSource);
 
   const createdAt = new Date().toISOString();
   const post: CommunityPost = {
@@ -879,6 +911,8 @@ app.post("/api/posts", async (c) => {
     lng,
     photoUrl,
     createdAt,
+    capturedAt,
+    locationSource,
     tags,
     aiTags,
     humanTags,

@@ -6,6 +6,8 @@ export type CommunityPost = {
   lng: number;
   photoUrl: string;
   createdAt: string;
+  capturedAt?: string;
+  locationSource?: "exif" | "device" | "manual" | "fallback";
   tags?: string[];
   aiTags?: string[];
   humanTags?: string[];

@@ -45,7 +45,12 @@
 │   ├── 0001_create_community_posts.sql
 │   ├── 0002_create_admin_places.sql
 │   ├── 0003_add_tags_to_community_posts.sql
-│   └── 0004_add_ai_and_human_tags_to_community_posts.sql
+│   ├── 0004_add_ai_and_human_tags_to_community_posts.sql
+│   └── 0005_add_capture_and_location_source_to_community_posts.sql
+├── openspec/
+│   ├── config.yaml
+│   ├── changes/
+│   └── specs/
 ├── package.json
 ├── vite.config.ts
 ├── wrangler.jsonc
@@ -121,6 +126,16 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## OpenSpec
+
+このリポジトリには OpenSpec を導入済みです。仕様先行で大きめの変更を進めたい場合は、GitHub Copilot の slash command から開始できます。
+
+- 変更提案の開始: `/opsx:propose "変更内容"`
+- 既存仕様や change の探索: `/opsx:explore`
+- 実装後の仕様同期: `/opsx:sync`
+
+初回反映後は IDE の再起動が必要です。OpenSpec のプロジェクト設定は `openspec/config.yaml` にあります。
 
 ## デプロイ
 

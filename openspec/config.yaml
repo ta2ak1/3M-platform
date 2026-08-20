@@ -1,0 +1,28 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+context: |
+	Tech stack: React 19, TypeScript, Vite, Hono, Cloudflare Workers, D1, R2, Leaflet.
+	Frontend lives in src/ and worker API lives in worker/index.ts.
+	Database migrations live in migrations/ and must remain backward-compatible with deployed D1 state.
+	Community posts persist title, summary, lat, lng, photoUrl, tags, aiTags, humanTags, capturedAt, and locationSource.
+	Prefer minimal focused changes and validate with npm run build when code changes affect app or worker behavior.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+rules:
+	proposal:
+		- Describe API, schema, and UI impact separately when the change spans frontend and worker.
+		- Call out backward-compatibility implications for D1 migrations and stored post data.
+	tasks:
+		- Keep tasks scoped so they can be validated with a concrete command or visible UI check.
