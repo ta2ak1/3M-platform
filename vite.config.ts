@@ -12,6 +12,18 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] }),
     cloudflare(),
     tailwindcss(),
-    VitePWA({ registerType: "autoUpdate" }),
+    VitePWA({
+      registerType: "autoUpdate",
+      manifest: {
+        icons: [
+          {
+            src: "/favicon.png",
+            sizes: "1000x1000",
+            type: "image/png",
+            purpose: "any maskable",
+          },
+        ],
+      },
+    }),
   ],
 });
