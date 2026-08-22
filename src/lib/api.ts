@@ -75,6 +75,8 @@ export async function fetchPosts(bbox?: BboxQuery): Promise<CommunityPost[]> {
 
 export async function precheckPost(formData: FormData): Promise<{
   ok: boolean;
+  title?: string;
+  summary?: string;
   tags: string[];
   message?: string;
 }> {
@@ -85,6 +87,8 @@ export async function precheckPost(formData: FormData): Promise<{
 
   const payload = (await response.json().catch(() => ({}))) as {
     ok?: boolean;
+    title?: string;
+    summary?: string;
     tags?: string[];
     message?: string;
     reason?: string;
@@ -102,6 +106,8 @@ export async function precheckPost(formData: FormData): Promise<{
 
   return {
     ok: true,
+    title: typeof payload.title === "string" ? payload.title : undefined,
+    summary: typeof payload.summary === "string" ? payload.summary : undefined,
     tags: Array.isArray(payload.tags) ? payload.tags : [],
   };
 }

@@ -7,6 +7,7 @@ import {
 } from "./TurnstileWidget";
 
 type LocationSource = "exif" | "device" | "fallback";
+type PostMode = "photo" | "text";
 
 async function readExifLocation(
   file: File,
@@ -147,6 +148,7 @@ interface PostFormProps {
 }
 
 export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
+  const [postMode, setPostMode] = useState<PostMode>("photo");
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -208,26 +210,37 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
     setTagInput("");
   };
 
-  const handlePrecheck = async () => {
-    if (!title.trim() || !summary.trim()) {
-      setErrorMessage("タイトルと一言は必須です。");
-      return;
+  const resetDraft = (nextMessage?: string) => {
+    setReviewStep("editing");
+    setReviewMessage("");
+    setSuggestedTags([]);
+    setSelectedTags([]);
+    setTurnstileToken("");
+    if (nextMessage) {
+      setErrorMessage(nextMessage);
+    } else {
+      setErrorMessage("");
     }
+  };
 
-    if (!photoFile) {
+  const handlePrecheck = async () => {
+    if (postMode === "photo" && !photoFile) {
       setErrorMessage("投稿する写真を選択してください。");
       return;
     }
 
-    if (!hasAcceptedPostTerms) {
-      setErrorMessage("投稿規約と位置情報の公開について確認してください。");
+    if (postMode === "text" && (!title.trim() || !summary.trim())) {
+      setErrorMessage("写真なし投稿ではタイトルと一言を入力してください。");
       return;
     }
 
     const precheckFormData = new FormData();
+    precheckFormData.set("mode", postMode);
     precheckFormData.set("title", title.trim());
     precheckFormData.set("comment", summary.trim());
-    precheckFormData.set("photo", await createAiSafePhoto(photoFile));
+    if (postMode === "photo" && photoFile) {
+      precheckFormData.set("photo", await createAiSafePhoto(photoFile));
+    }
 
     setIsChecking(true);
     setErrorMessage("");
@@ -248,11 +261,21 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       }
 
       const nextTags = normalizeTags(precheckResult.tags ?? []);
+      if (precheckResult.title) {
+        setTitle(precheckResult.title);
+      }
+      if (precheckResult.summary) {
+        setSummary(precheckResult.summary);
+      }
       setSuggestedTags(nextTags);
       setSelectedTags((current) =>
         normalizeTags(current.length > 0 ? current : nextTags),
       );
-      setReviewMessage("AIの提案を確認し、人が最終判断する段階です。");
+      setReviewMessage(
+        postMode === "photo"
+          ? "写真から作った下書きです。内容を確認して編集できます。"
+          : "文章からタグ候補を作りました。内容を確認して投稿できます。",
+      );
       setReviewStep("reviewing");
     } finally {
       setIsChecking(false);
@@ -265,8 +288,13 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       return;
     }
 
-    if (!photoFile) {
+    if (postMode === "photo" && !photoFile) {
       setErrorMessage("投稿する写真を選択してください。");
+      return;
+    }
+
+    if (!hasAcceptedPostTerms) {
+      setErrorMessage("投稿規約と位置情報の公開について確認してください。");
       return;
     }
 
@@ -287,7 +315,9 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       formData.set("summary", summary.trim());
       formData.set("lat", String(lat));
       formData.set("lng", String(lng));
-      formData.set("photo", photoFile);
+      if (postMode === "photo" && photoFile) {
+        formData.set("photo", photoFile);
+      }
       formData.set("aiTags", JSON.stringify(suggestedTags));
       formData.set("humanTags", JSON.stringify(finalTags));
       formData.set("tags", JSON.stringify(finalTags));
@@ -348,7 +378,45 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       onSubmit={handleSubmit}
       className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
     >
-      <div>
+      <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+        {[
+          ["photo", "写真から投稿"],
+          ["text", "写真なしで投稿"],
+        ].map(([mode, label]) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => {
+              const nextMode = mode as PostMode;
+              setPostMode(nextMode);
+              resetDraft();
+              if (nextMode === "text") {
+                setPhotoFile(null);
+                setLocationSource("fallback");
+                setCapturedAt(undefined);
+                setResolvedLat(undefined);
+                setResolvedLng(undefined);
+                const fileInput = document.getElementById(
+                  "post-photo",
+                ) as HTMLInputElement | null;
+                if (fileInput) {
+                  fileInput.value = "";
+                }
+              }
+            }}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              postMode === mode
+                ? "bg-white text-primary shadow-sm"
+                : "text-slate-600 hover:bg-white/70"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {postMode === "text" || reviewStep === "reviewing" ? (
+        <div>
         <label className="mb-1 block text-sm font-semibold text-slate-700">
           タイトル
         </label>
@@ -356,19 +424,16 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
           value={title}
           onChange={(event) => {
             setTitle(event.target.value);
-            if (reviewStep === "reviewing") {
-              resetReviewState(
-                "内容を修正したので、AI確認をやり直してください。",
-              );
-            }
           }}
           className="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           placeholder="例: 夕暮れの駅前の小さな広場"
           maxLength={60}
         />
-      </div>
+        </div>
+      ) : null}
 
-      <div>
+      {postMode === "text" || reviewStep === "reviewing" ? (
+        <div>
         <label className="mb-1 block text-sm font-semibold text-slate-700">
           一言
         </label>
@@ -376,20 +441,17 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
           value={summary}
           onChange={(event) => {
             setSummary(event.target.value);
-            if (reviewStep === "reviewing") {
-              resetReviewState(
-                "内容を修正したので、AI確認をやり直してください。",
-              );
-            }
           }}
           rows={4}
           className="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           placeholder="おすすめの理由や見どころを一言で"
           maxLength={200}
         />
-      </div>
+        </div>
+      ) : null}
 
-      <div>
+      {postMode === "photo" ? (
+        <div>
         <label className="mb-1 block text-sm font-semibold text-slate-700">
           写真
         </label>
@@ -466,12 +528,14 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
             </span>
           </p>
         )}
-      </div>
+        </div>
+      ) : null}
 
       {reviewStep === "reviewing" ? (
         <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
           <div className="flex flex-col gap-4 lg:flex-row">
-            <div className="lg:w-44">
+            {postMode === "photo" ? (
+              <div className="lg:w-44">
               <div className="overflow-hidden rounded-xl border border-emerald-100 bg-white">
                 {photoPreviewUrl ? (
                   <img
@@ -481,7 +545,8 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
                   />
                 ) : null}
               </div>
-            </div>
+              </div>
+            ) : null}
 
             <div className="flex-1 space-y-4">
               <div>
@@ -593,7 +658,8 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
         </div>
       ) : null}
 
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+      {reviewStep === "reviewing" ? (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
         <label className="flex cursor-pointer items-start gap-2">
           <input
             type="checkbox"
@@ -616,7 +682,8 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
             この投稿をCC BY 4.0で公開する（任意）。第三者による出典表示付きの商用利用・改変・再配布を許可します。
           </span>
         </label>
-      </div>
+        </div>
+      ) : null}
 
       {reviewStep === "editing" && suggestedTags.length > 0 ? (
         <div className="rounded-xl bg-slate-50 p-3">
@@ -681,12 +748,16 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
         className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isChecking
-          ? "AI判定中..."
+          ? postMode === "photo"
+            ? "AI下書き中..."
+            : "タグ提案中..."
           : isSubmitting
             ? "投稿中..."
             : reviewStep === "reviewing"
               ? "内容を確認して投稿する"
-              : "AIで下書きを作成する"}
+              : postMode === "photo"
+                ? "AIで下書きを作成する"
+                : "AIでタグを提案する"}
       </button>
 
       {reviewStep === "reviewing" ? (

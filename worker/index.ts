@@ -548,6 +548,15 @@ function sanitizeTags(tags: string[]): string[] {
     .filter((tag) => allowed.has(tag) || tag.length >= 2);
 }
 
+function sanitizeDraftText(value: unknown, fallback: string, maxLength: number) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const text = value.trim().replace(/\s+/g, " ");
+  return text ? text.slice(0, maxLength) : fallback;
+}
+
 function arrayBufferToBase64DataUrl(
   buffer: ArrayBuffer,
   mimeType = "image/jpeg",
@@ -868,6 +877,107 @@ async function runTagSuggestion(
   }
 }
 
+async function runPhotoDraftSuggestion(
+  env: CloudflareEnv,
+  imageBuffer: ArrayBuffer,
+): Promise<{ title: string; summary: string; tags: string[] }> {
+  try {
+    const constrainedImage = await resizeImageForAi(imageBuffer, 1200, 0.7);
+    const imageDataUrl = arrayBufferToBase64DataUrl(
+      constrainedImage,
+      "image/jpeg",
+    );
+
+    await ensureVisionModelAccepted(env);
+
+    const response = await runVisionModel(env, {
+      messages: [
+        {
+          role: "system",
+          content:
+            "あなたは地域の魅力投稿の下書きを作る編集者です。写真から、自然な日本語の短い投稿案を作ってください。",
+        },
+        {
+          role: "user",
+          content: `
+            この写真をもとに、投稿タイトル、一言コメント、タグ候補を作成してください。
+            誇張しすぎず、写真から読み取れる範囲で具体的にしてください。
+            出力は必ず JSON で以下の形式にしてください:
+            { "title": "短いタイトル", "summary": "一言コメント", "tags": ["公園", "散歩", "自然"] }
+          `,
+        },
+      ],
+      image: imageDataUrl,
+    });
+
+    const parsed = normalizeJsonResponse(response);
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags.filter((tag): tag is string => typeof tag === "string")
+      : [];
+
+    return {
+      title: sanitizeDraftText(parsed.title, "地域の魅力スポット", 60),
+      summary: sanitizeDraftText(
+        parsed.summary ?? parsed.comment,
+        "写真から見つけた地域のおすすめスポットです。",
+        200,
+      ),
+      tags: sanitizeTags(tags),
+    };
+  } catch {
+    return {
+      title: "地域の魅力スポット",
+      summary: "写真から見つけた地域のおすすめスポットです。",
+      tags: [],
+    };
+  }
+}
+
+async function runTextTagSuggestion(
+  env: CloudflareEnv,
+  title: string,
+  comment: string,
+): Promise<string[]> {
+  try {
+    await ensureVisionModelAccepted(env);
+
+    const response = await runVisionModel(env, {
+      messages: [
+        {
+          role: "system",
+          content:
+            "あなたは地域の魅力投稿向けに、文章から適切な日本語タグ候補を作成するアシスタントです。",
+        },
+        {
+          role: "user",
+          content: `
+            次の投稿文からタグ候補を3〜6個作成してください。
+            出力は必ず JSON で以下の形式にしてください:
+            { "tags": ["公園", "散歩", "自然"] }
+
+            タイトル: ${title}
+            コメント: ${comment}
+          `,
+        },
+      ],
+    });
+
+    const parsed = normalizeJsonResponse(response);
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags.filter((tag): tag is string => typeof tag === "string")
+      : typeof parsed.tags === "string"
+        ? parsed.tags
+            .split(/[\s,、,]+/)
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+        : [];
+
+    return sanitizeTags(tags);
+  } catch {
+    return sanitizeTags([title, ...comment.split(/[\s,、。]+/)]).slice(0, 6);
+  }
+}
+
 const app = new Hono<AppEnv>();
 
 app.get("/uploads/*", async (c) => {
@@ -928,9 +1038,34 @@ app.get("/api/posts", async (c) => {
 
 app.post("/api/posts/precheck", async (c) => {
   const formData = await c.req.formData();
+  const mode = String(formData.get("mode") ?? "photo");
   const photo = formData.get("photo");
   const title = String(formData.get("title") ?? "").trim();
   const comment = String(formData.get("comment") ?? "").trim();
+
+  if (mode === "text") {
+    if (!title || !comment) {
+      return c.json(
+        {
+          ok: false,
+          error: "missing_text",
+          message: "写真なし投稿ではタイトルと一言を入力してください。",
+        },
+        400,
+      );
+    }
+
+    const tags = await runTextTagSuggestion(c.env, title, comment);
+    return c.json({
+      ok: true,
+      safe: true,
+      title,
+      summary: comment,
+      tags,
+      warnings: [],
+      requiresReview: false,
+    });
+  }
 
   if (!(photo instanceof File)) {
     return c.json(
@@ -944,11 +1079,12 @@ app.post("/api/posts/precheck", async (c) => {
   }
 
   const imageBuffer = await photo.arrayBuffer();
+  const draft = await runPhotoDraftSuggestion(c.env, imageBuffer);
   const moderation = await runModerationCheck(
     c.env,
     imageBuffer,
-    title,
-    comment,
+    title || draft.title,
+    comment || draft.summary,
   );
 
   if (!moderation.safe) {
@@ -967,7 +1103,15 @@ app.post("/api/posts/precheck", async (c) => {
     );
   }
 
-  const tags = await runTagSuggestion(c.env, imageBuffer, title, comment);
+  const tags =
+    draft.tags.length > 0
+      ? draft.tags
+      : await runTagSuggestion(
+          c.env,
+          imageBuffer,
+          title || draft.title,
+          comment || draft.summary,
+        );
   const warnings = moderation.serviceError
     ? [
         moderation.reason ??
@@ -978,6 +1122,8 @@ app.post("/api/posts/precheck", async (c) => {
   return c.json({
     ok: true,
     safe: true,
+    title: title || draft.title,
+    summary: comment || draft.summary,
     tags,
     warnings,
     requiresReview: moderation.serviceError === true,
@@ -1012,7 +1158,9 @@ app.post("/api/posts", async (c) => {
 
   let photoUrl =
     photoUrlFromBody ||
-    "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=1200&q=80";
+    (file
+      ? "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=1200&q=80"
+      : "/favicon.svg");
 
   if (file) {
     const extension = file.name.includes(".")
