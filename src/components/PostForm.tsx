@@ -81,7 +81,7 @@ async function createAiSafePhoto(file: File): Promise<File> {
     },
   );
 
-  const maxDimension = 1200;
+  const maxDimension = 800;
   const scale = Math.min(
     1,
     maxDimension / Math.max(imageElement.width, imageElement.height),
@@ -110,7 +110,7 @@ async function createAiSafePhoto(file: File): Promise<File> {
         resolve(nextBlob);
       },
       "image/jpeg",
-      0.8,
+      0.6,
     );
   });
 
