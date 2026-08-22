@@ -16,6 +16,7 @@ function App() {
   const [initialMapLocation, setInitialMapLocation] =
     useState(DEFAULT_LOCATION);
   const [seedCount, setSeedCount] = useState(0);
+  const [visibleSeedCount, setVisibleSeedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mapBbox, setMapBbox] = useState<BboxQuery | null>(null);
@@ -32,25 +33,16 @@ function App() {
   const loadPosts = useCallback(async (bbox?: BboxQuery | null) => {
     setIsLoading(true);
     try {
-      const [nextPosts, nextAdminPlaces, seedResponse] = await Promise.all([
+      const [nextPosts, nextAdminPlacesResponse] = await Promise.all([
         fetchPosts(bbox ?? undefined),
-        fetchAdminPlaces(),
-        fetch("/api/seed", { headers: { Accept: "application/json" } }),
+        fetchAdminPlaces(bbox ?? undefined),
       ]);
 
       setPosts(nextPosts);
-      setAdminPlaces(nextAdminPlaces);
+      setAdminPlaces(nextAdminPlacesResponse.places);
+      setSeedCount(nextAdminPlacesResponse.count);
+      setVisibleSeedCount(nextAdminPlacesResponse.visibleCount);
       setErrorMessage(null);
-
-      if (seedResponse.ok) {
-        const payload = (await seedResponse.json()) as {
-          count?: number;
-          places?: AdminPlace[];
-        };
-        setSeedCount(
-          payload.count ?? payload.places?.length ?? nextAdminPlaces.length,
-        );
-      }
     } catch {
       setErrorMessage(
         "投稿データの取得に失敗しました。少し時間を置いて再読み込みしてください。",
@@ -130,7 +122,8 @@ function App() {
             </div>
             <div className="flex flex-wrap items-center gap-3 text-sm text-emerald-50">
               <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
-                行政シード {seedCount}件
+                行政シード {seedCount.toLocaleString("ja-JP")}件 / 表示中{" "}
+                {visibleSeedCount.toLocaleString("ja-JP")}件
               </span>
               <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
                 市民投稿 {posts.length}件

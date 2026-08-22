@@ -144,6 +144,22 @@ type BboxParams = {
   maxLng: number;
 };
 
+function parseBboxParams(q: Record<string, string | undefined>) {
+  const minLat = parseFloat(q.minLat ?? "");
+  const maxLat = parseFloat(q.maxLat ?? "");
+  const minLng = parseFloat(q.minLng ?? "");
+  const maxLng = parseFloat(q.maxLng ?? "");
+
+  return Number.isFinite(minLat) &&
+    Number.isFinite(maxLat) &&
+    Number.isFinite(minLng) &&
+    Number.isFinite(maxLng) &&
+    minLat < maxLat &&
+    minLng < maxLng
+    ? { minLat, maxLat, minLng, maxLng }
+    : undefined;
+}
+
 async function readPostsFromD1(
   db: D1Database | undefined,
   bbox?: BboxParams,
@@ -334,14 +350,42 @@ async function ensureSeedData(db: D1Database | undefined) {
 
 async function readSeedPlacesFromD1(
   db: D1Database | undefined,
-): Promise<AdminPlace[]> {
+  bbox?: BboxParams,
+  limit = 500,
+): Promise<{ count: number; places: AdminPlace[] }> {
+  const safeLimit = Math.min(Math.max(1, limit), 1000);
+
   if (!db) {
-    return seedPlaces;
+    const filteredPlaces = bbox
+      ? seedPlaces.filter(
+          (place) =>
+            place.lat >= bbox.minLat &&
+            place.lat <= bbox.maxLat &&
+            place.lng >= bbox.minLng &&
+            place.lng <= bbox.maxLng,
+        )
+      : seedPlaces;
+
+    return {
+      count: seedPlaces.length,
+      places: filteredPlaces.slice(0, safeLimit),
+    };
   }
+
+  const count = await db
+    .prepare("SELECT COUNT(*) AS count FROM admin_places")
+    .first<{ count: number }>();
 
   const results = await db
     .prepare(
-      "SELECT id, name, category, city, prefecture, lat, lng FROM admin_places ORDER BY name ASC LIMIT 200",
+      bbox
+        ? "SELECT id, name, category, city, prefecture, lat, lng FROM admin_places WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ? ORDER BY name ASC LIMIT ?"
+        : "SELECT id, name, category, city, prefecture, lat, lng FROM admin_places ORDER BY name ASC LIMIT ?",
+    )
+    .bind(
+      ...(bbox
+        ? [bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng, safeLimit]
+        : [safeLimit]),
     )
     .all<{
       id: string;
@@ -354,7 +398,9 @@ async function readSeedPlacesFromD1(
     }>();
 
   if ((results.results ?? []).length > 0) {
-    return (results.results ?? []).map((row) => ({
+    return {
+      count: count?.count ?? 0,
+      places: (results.results ?? []).map((row) => ({
       id: row.id,
       name: row.name,
       category: row.category,
@@ -362,10 +408,14 @@ async function readSeedPlacesFromD1(
       prefecture: row.prefecture,
       lat: Number(row.lat),
       lng: Number(row.lng),
-    }));
+      })),
+    };
   }
 
-  return seedPlaces;
+  return {
+    count: count?.count ?? 0,
+    places: [],
+  };
 }
 
 function buildFallbackUrl(fileName: string, fallback: string) {
@@ -843,31 +893,26 @@ app.get("/api/health", (c) => {
 
 app.get("/api/seed", async (c) => {
   await ensureSeedData(c.env.DB);
-  const places = await readSeedPlacesFromD1(c.env.DB);
+  const q = c.req.query();
+  const bbox = parseBboxParams(q);
+  const limit = parseInt(q.limit ?? "500", 10);
+  const result = await readSeedPlacesFromD1(
+    c.env.DB,
+    bbox,
+    Number.isFinite(limit) ? limit : 500,
+  );
 
   return c.json({
-    count: places.length,
-    places,
+    count: result.count,
+    visibleCount: result.places.length,
+    places: result.places,
   });
 });
 
 app.get("/api/posts", async (c) => {
   const q = c.req.query();
-  const minLat = parseFloat(q.minLat ?? "");
-  const maxLat = parseFloat(q.maxLat ?? "");
-  const minLng = parseFloat(q.minLng ?? "");
-  const maxLng = parseFloat(q.maxLng ?? "");
   const limit = parseInt(q.limit ?? "100", 10);
-
-  const bbox =
-    Number.isFinite(minLat) &&
-    Number.isFinite(maxLat) &&
-    Number.isFinite(minLng) &&
-    Number.isFinite(maxLng) &&
-    minLat < maxLat &&
-    minLng < maxLng
-      ? { minLat, maxLat, minLng, maxLng }
-      : undefined;
+  const bbox = parseBboxParams(q);
 
   const dbPosts = await readPostsFromD1(
     c.env.DB,

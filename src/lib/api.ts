@@ -3,25 +3,6 @@ import { mockPosts } from "./mockData";
 
 const API_BASE = "/api";
 
-export async function fetchAdminPlaces(): Promise<AdminPlace[]> {
-  const response = await fetch(`${API_BASE}/seed`, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    return [];
-  }
-
-  const payload = (await response.json()) as {
-    places?: AdminPlace[];
-    count?: number;
-  };
-
-  return payload.places ?? [];
-}
-
 export type BboxQuery = {
   minLat: number;
   maxLat: number;
@@ -29,19 +10,56 @@ export type BboxQuery = {
   maxLng: number;
 };
 
-export async function fetchPosts(bbox?: BboxQuery): Promise<CommunityPost[]> {
-  let url = `${API_BASE}/posts`;
-  if (bbox) {
-    const params = new URLSearchParams({
-      minLat: String(bbox.minLat),
-      maxLat: String(bbox.maxLat),
-      minLng: String(bbox.minLng),
-      maxLng: String(bbox.maxLng),
-    });
-    url = `${url}?${params.toString()}`;
+function buildBboxUrl(path: string, bbox?: BboxQuery): string {
+  if (!bbox) {
+    return `${API_BASE}${path}`;
   }
 
-  const response = await fetch(url, {
+  const params = new URLSearchParams({
+    minLat: String(bbox.minLat),
+    maxLat: String(bbox.maxLat),
+    minLng: String(bbox.minLng),
+    maxLng: String(bbox.maxLng),
+  });
+
+  return `${API_BASE}${path}?${params.toString()}`;
+}
+
+export type AdminPlacesResponse = {
+  count: number;
+  visibleCount: number;
+  places: AdminPlace[];
+};
+
+export async function fetchAdminPlaces(
+  bbox?: BboxQuery,
+): Promise<AdminPlacesResponse> {
+  const response = await fetch(buildBboxUrl("/seed", bbox), {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    return { count: 0, visibleCount: 0, places: [] };
+  }
+
+  const payload = (await response.json()) as {
+    places?: AdminPlace[];
+    count?: number;
+    visibleCount?: number;
+  };
+  const places = payload.places ?? [];
+
+  return {
+    count: payload.count ?? places.length,
+    visibleCount: payload.visibleCount ?? places.length,
+    places,
+  };
+}
+
+export async function fetchPosts(bbox?: BboxQuery): Promise<CommunityPost[]> {
+  const response = await fetch(buildBboxUrl("/posts", bbox), {
     headers: {
       Accept: "application/json",
     },
