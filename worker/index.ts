@@ -35,12 +35,14 @@ type PostRow = {
   createdAt: string;
   capturedAt?: string;
   locationSource?: string;
+  contentLicense?: string;
   tags?: string;
   aiTags?: string;
   humanTags?: string;
 };
 
 type LocationSource = "exif" | "device" | "manual" | "fallback";
+type ContentLicense = "all-rights-reserved" | "cc-by-4.0";
 
 type GeoJsonSeedFeature = {
   type?: string;
@@ -146,7 +148,7 @@ async function readPostsFromD1(
   const safeLimit = Math.min(Math.max(1, limit), 200);
 
   const SELECT =
-    "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, captured_at AS capturedAt, location_source AS locationSource, tags, ai_tags AS aiTags, human_tags AS humanTags FROM community_posts";
+    "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, captured_at AS capturedAt, location_source AS locationSource, content_license AS contentLicense, tags, ai_tags AS aiTags, human_tags AS humanTags FROM community_posts";
 
   const results =
     bbox != null
@@ -170,6 +172,7 @@ async function readPostsFromD1(
     createdAt: row.createdAt,
     capturedAt: row.capturedAt,
     locationSource: parseLocationSource(row.locationSource),
+    contentLicense: parseContentLicense(row.contentLicense),
     tags: safeParseTags(row.humanTags ?? row.tags),
     aiTags: safeParseTags(row.aiTags),
     humanTags: safeParseTags(row.humanTags ?? row.tags),
@@ -183,6 +186,10 @@ function parseLocationSource(value: unknown): LocationSource {
     value === "fallback"
     ? value
     : "fallback";
+}
+
+function parseContentLicense(value: unknown): ContentLicense {
+  return value === "cc-by-4.0" ? "cc-by-4.0" : "all-rights-reserved";
 }
 
 function normalizeCapturedAt(value: unknown): string | undefined {
@@ -220,7 +227,7 @@ async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
 
   await db
     .prepare(
-      "INSERT INTO community_posts (id, title, summary, lat, lng, photo_url, created_at, captured_at, location_source, tags, ai_tags, human_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO community_posts (id, title, summary, lat, lng, photo_url, created_at, captured_at, location_source, content_license, tags, ai_tags, human_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       post.id,
@@ -232,6 +239,7 @@ async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
       post.createdAt,
       post.capturedAt ?? null,
       post.locationSource ?? "fallback",
+      post.contentLicense ?? "all-rights-reserved",
       JSON.stringify(post.tags ?? []),
       JSON.stringify(post.aiTags ?? []),
       JSON.stringify(post.humanTags ?? post.tags ?? []),
@@ -942,6 +950,7 @@ app.post("/api/posts", async (c) => {
   const tags = humanTags;
   const capturedAt = normalizeCapturedAt(body.capturedAt);
   const locationSource = parseLocationSource(body.locationSource);
+  const contentLicense = parseContentLicense(body.contentLicense);
 
   const createdAt = new Date().toISOString();
   const post: CommunityPost = {
@@ -954,6 +963,7 @@ app.post("/api/posts", async (c) => {
     createdAt,
     capturedAt,
     locationSource,
+    contentLicense,
     tags,
     aiTags,
     humanTags,

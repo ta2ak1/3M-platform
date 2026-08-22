@@ -6,7 +6,11 @@ type LocationSource = "exif" | "device" | "fallback";
 
 async function readExifLocation(
   file: File,
-): Promise<{ latitude: number; longitude: number; capturedAt?: string } | null> {
+): Promise<{
+  latitude: number;
+  longitude: number;
+  capturedAt?: string;
+} | null> {
   try {
     const result = (await exifr.parse(file, {
       gps: true,
@@ -159,6 +163,8 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  const [hasAcceptedPostTerms, setHasAcceptedPostTerms] = useState(false);
+  const [isCcByLicensed, setIsCcByLicensed] = useState(false);
 
   const finalTags = useMemo(() => normalizeTags(selectedTags), [selectedTags]);
 
@@ -203,6 +209,11 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
 
     if (!photoFile) {
       setErrorMessage("投稿する写真を選択してください。");
+      return;
+    }
+
+    if (!hasAcceptedPostTerms) {
+      setErrorMessage("投稿規約と位置情報の公開について確認してください。");
       return;
     }
 
@@ -272,6 +283,10 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
         formData.set("capturedAt", capturedAt);
       }
       formData.set("locationSource", locationSource);
+      formData.set(
+        "contentLicense",
+        isCcByLicensed ? "cc-by-4.0" : "all-rights-reserved",
+      );
 
       await onSubmit(formData);
 
@@ -281,6 +296,8 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       setSuggestedTags([]);
       setSelectedTags([]);
       setTagInput("");
+      setHasAcceptedPostTerms(false);
+      setIsCcByLicensed(false);
       setReviewStep("editing");
       setReviewMessage("");
       const fileInput = document.getElementById(
@@ -554,6 +571,31 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
           {errorMessage}
         </div>
       ) : null}
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="checkbox"
+            checked={hasAcceptedPostTerms}
+            onChange={(event) => setHasAcceptedPostTerms(event.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            投稿内容に必要な権利を持ち、人物・第三者著作物・位置情報の公開に必要な確認を済ませ、運営に必要な非独占的利用許諾に同意します。
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="checkbox"
+            checked={isCcByLicensed}
+            onChange={(event) => setIsCcByLicensed(event.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            この投稿をCC BY 4.0で公開する（任意）。第三者による出典表示付きの商用利用・改変・再配布を許可します。
+          </span>
+        </label>
+      </div>
 
       {reviewStep === "editing" && suggestedTags.length > 0 ? (
         <div className="rounded-xl bg-slate-50 p-3">

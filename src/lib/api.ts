@@ -121,6 +121,10 @@ export async function submitPost(formData: FormData): Promise<CommunityPost> {
           ? (src as "exif" | "device" | "manual")
           : "fallback";
       })(),
+      contentLicense:
+        formData.get("contentLicense") === "cc-by-4.0"
+          ? "cc-by-4.0"
+          : "all-rights-reserved",
       tags: (() => {
         const rawTags = formData.get("tags");
         if (typeof rawTags !== "string") {

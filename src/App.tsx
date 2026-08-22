@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PostForm } from "./components/PostForm";
 import { PostMap } from "./components/PostMap";
+import { LegalNotice } from "./components/LegalNotice";
 import { fetchAdminPlaces, fetchPosts, submitPost } from "./lib/api";
 import type { BboxQuery } from "./lib/api";
 import type { AdminPlace, CommunityPost } from "./types";
@@ -57,13 +58,10 @@ function App() {
     }
   }, []);
 
-  const handleBoundsChange = useCallback(
-    (bbox: BboxQuery) => {
-      mapBboxRef.current = bbox;
-      setMapBbox(bbox);
-    },
-    [],
-  );
+  const handleBoundsChange = useCallback((bbox: BboxQuery) => {
+    mapBboxRef.current = bbox;
+    setMapBbox(bbox);
+  }, []);
 
   // mapBbox が変化したら再取得（初期表示時を含む）
   useEffect(() => {
@@ -327,6 +325,7 @@ function App() {
           </section>
         </div>
       </main>
+      <LegalNotice />
     </div>
   );
 }

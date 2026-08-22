@@ -8,6 +8,7 @@ export type CommunityPost = {
   createdAt: string;
   capturedAt?: string;
   locationSource?: "exif" | "device" | "manual" | "fallback";
+  contentLicense?: "all-rights-reserved" | "cc-by-4.0";
   tags?: string[];
   aiTags?: string[];
   humanTags?: string[];
