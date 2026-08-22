@@ -93,6 +93,27 @@ npx wrangler r2 bucket create 3m-platform-photos
 
 `wrangler.jsonc` では公開に必要な設定だけを管理し、実際の機密情報は Cloudflare 側の環境変数や Secrets Store で保持してください。
 
+### Cloudflare Turnstile
+
+市民投稿の最終送信時に Cloudflare Turnstile を使って bot 投稿を抑止します。
+
+- フロントエンドには公開用の `VITE_TURNSTILE_SITE_KEY` を設定します。
+- Worker には秘密鍵 `TURNSTILE_SECRET_KEY` を Secret として設定します。
+- `TURNSTILE_SECRET_KEY` が設定された環境では、Turnstile 検証に失敗した投稿を保存しません。
+
+ローカル検証では Cloudflare のテストキーを使えます。
+
+```bash
+VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+```
+
+本番の秘密鍵はリポジトリに含めず、Cloudflare に登録してください。
+
+```bash
+npx wrangler secret put TURNSTILE_SECRET_KEY
+```
+
 ### Cloudflare Secrets への移行手順
 
 1. 秘密にしたい値を洗い出します。

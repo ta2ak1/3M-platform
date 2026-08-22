@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import exifr from "exifr";
 import { precheckPost } from "../lib/api";
+import {
+  isTurnstileEnabled,
+  TurnstileWidget,
+} from "./TurnstileWidget";
 
 type LocationSource = "exif" | "device" | "fallback";
 
@@ -165,8 +169,11 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
   const [tagInput, setTagInput] = useState("");
   const [hasAcceptedPostTerms, setHasAcceptedPostTerms] = useState(false);
   const [isCcByLicensed, setIsCcByLicensed] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   const finalTags = useMemo(() => normalizeTags(selectedTags), [selectedTags]);
+  const turnstileEnabled = isTurnstileEnabled();
 
   useEffect(() => {
     if (!photoFile) {
@@ -263,6 +270,11 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       return;
     }
 
+    if (turnstileEnabled && !turnstileToken) {
+      setErrorMessage("セキュリティ確認を完了してください。");
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage("");
 
@@ -287,6 +299,9 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
         "contentLicense",
         isCcByLicensed ? "cc-by-4.0" : "all-rights-reserved",
       );
+      if (turnstileToken) {
+        formData.set("cf-turnstile-response", turnstileToken);
+      }
 
       await onSubmit(formData);
 
@@ -298,6 +313,8 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       setTagInput("");
       setHasAcceptedPostTerms(false);
       setIsCcByLicensed(false);
+      setTurnstileToken("");
+      setTurnstileResetKey((current) => current + 1);
       setReviewStep("editing");
       setReviewMessage("");
       const fileInput = document.getElementById(
@@ -307,6 +324,10 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
         fileInput.value = "";
       }
     } finally {
+      if (turnstileEnabled) {
+        setTurnstileToken("");
+        setTurnstileResetKey((current) => current + 1);
+      }
       setIsSubmitting(false);
     }
   };
@@ -630,9 +651,33 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
         </div>
       ) : null}
 
+      {reviewStep === "reviewing" ? (
+        <TurnstileWidget
+          key={turnstileResetKey}
+          onVerify={(token) => {
+            setTurnstileToken(token);
+            setErrorMessage("");
+          }}
+          onExpire={() => {
+            setTurnstileToken("");
+            setErrorMessage("セキュリティ確認の有効期限が切れました。");
+          }}
+          onError={() => {
+            setTurnstileToken("");
+            setErrorMessage(
+              "セキュリティ確認に失敗しました。再読み込みして再度お試しください。",
+            );
+          }}
+        />
+      ) : null}
+
       <button
         type="submit"
-        disabled={isSubmitting || isChecking}
+        disabled={
+          isSubmitting ||
+          isChecking ||
+          (reviewStep === "reviewing" && turnstileEnabled && !turnstileToken)
+        }
         className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isChecking

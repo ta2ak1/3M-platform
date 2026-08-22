@@ -13,6 +13,8 @@ function App() {
   const [adminPlaces, setAdminPlaces] = useState<AdminPlace[]>([]);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [formLocation, setFormLocation] = useState(DEFAULT_LOCATION);
+  const [initialMapLocation, setInitialMapLocation] =
+    useState(DEFAULT_LOCATION);
   const [seedCount, setSeedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -61,6 +63,27 @@ function App() {
   const handleBoundsChange = useCallback((bbox: BboxQuery) => {
     mapBboxRef.current = bbox;
     setMapBbox(bbox);
+  }, []);
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setInitialMapLocation(nextLocation);
+        setFormLocation(nextLocation);
+      },
+      () => {
+        // 位置情報を取得できない場合は東京駅を起点にします。
+      },
+      { timeout: 5000, enableHighAccuracy: false },
+    );
   }, []);
 
   // mapBbox が変化したら再取得（初期表示時を含む）
@@ -294,6 +317,7 @@ function App() {
                 <PostMap
                   posts={posts}
                   adminPlaces={adminPlaces}
+                  initialCenter={initialMapLocation}
                   selectedPostId={selectedPostId}
                   onSelectPost={handleSelectPost}
                   onLocationPick={handleLocationPick}

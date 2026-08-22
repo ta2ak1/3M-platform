@@ -26,18 +26,22 @@
 ## Impact
 
 **UI（src/components/PostForm.tsx）**
+
 - 画像選択時に EXIF パーサーを呼び出す処理を追加
 - geolocation 取得の非同期フローを追加
 - 取得元バッジ（exif / device / fallback）の表示を追加
 - `capturedAt` / `locationSource` を最終送信ペイロードに含める
 
 **API（worker/index.ts）**
+
 - `captured_at` / `location_source` はすでに INSERT に含まれており追加変更なし
 
 **依存関係**
+
 - EXIF パーサーライブラリ（`exifr`）を追加インストールする
 - `navigator.geolocation` は HTTPS / localhost でのみ動作するブラウザ API
 
 **後方互換性**
+
 - D1 の `captured_at` は nullable、`location_source` は default `'fallback'` なので既存レコードへの影響なし
 - 送信ペイロードに新フィールドを追加するが Worker 側は optional 扱いのため既存動作を壊さない

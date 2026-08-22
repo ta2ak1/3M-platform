@@ -6,6 +6,7 @@ import type { AdminPlace, CommunityPost } from "../types";
 interface PostMapProps {
   posts: CommunityPost[];
   adminPlaces?: AdminPlace[];
+  initialCenter?: { lat: number; lng: number };
   selectedPostId?: string | null;
   onSelectPost?: (post: CommunityPost | null) => void;
   onLocationPick?: (location: { lat: number; lng: number }) => void;
@@ -26,6 +27,7 @@ async function loadLeaflet(): Promise<typeof Leaflet> {
 export function PostMap({
   posts,
   adminPlaces = [],
+  initialCenter = { lat: 35.681236, lng: 139.767125 },
   selectedPostId,
   onSelectPost,
   onLocationPick,
@@ -40,6 +42,8 @@ export function PostMap({
   const suppressMoveendRef = useRef(false);
   // 初回表示時のみ fitBounds を呼び出す
   const hasFittedBoundsRef = useRef(false);
+  const hasUserMovedMapRef = useRef(false);
+  const hasAppliedInitialCenterRef = useRef("");
   const [isReady, setIsReady] = useState(false);
 
   // リサイズ監視処理
@@ -77,7 +81,8 @@ export function PostMap({
 
       const map = L.map(container, {
         zoomControl: true,
-      }).setView([35.681236, 139.767125], 12);
+      }).setView([initialCenter.lat, initialCenter.lng], 14);
+      hasAppliedInitialCenterRef.current = `${initialCenter.lat},${initialCenter.lng}`;
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
@@ -92,6 +97,10 @@ export function PostMap({
       map.on("click", (event: Leaflet.LeafletMouseEvent) => {
         const { lat, lng } = event.latlng;
         onLocationPick?.({ lat, lng });
+      });
+
+      map.on("dragstart zoomstart", () => {
+        hasUserMovedMapRef.current = true;
       });
 
       let boundsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -130,6 +139,32 @@ export function PostMap({
       markerMapRef.current.clear();
     };
   }, [onLocationPick]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isReady || hasUserMovedMapRef.current) {
+      return;
+    }
+
+    const centerKey = `${initialCenter.lat},${initialCenter.lng}`;
+    if (hasAppliedInitialCenterRef.current === centerKey) {
+      return;
+    }
+
+    hasAppliedInitialCenterRef.current = centerKey;
+    suppressMoveendRef.current = true;
+    map.setView([initialCenter.lat, initialCenter.lng], 14);
+    map.once("moveend", () => {
+      suppressMoveendRef.current = false;
+      const b = map.getBounds();
+      onBoundsChange?.({
+        minLat: b.getSouth(),
+        maxLat: b.getNorth(),
+        minLng: b.getWest(),
+        maxLng: b.getEast(),
+      });
+    });
+  }, [initialCenter.lat, initialCenter.lng, isReady, onBoundsChange]);
 
   const normalizedPosts = useMemo(
     () =>
@@ -206,7 +241,12 @@ export function PostMap({
     ];
 
     // 初回のみ自動フィット（以降はユーザー操作に委ねる）
-    if (!hasFittedBoundsRef.current && allPoints.length > 0) {
+    if (
+      !hasFittedBoundsRef.current &&
+      !hasUserMovedMapRef.current &&
+      hasAppliedInitialCenterRef.current === "35.681236,139.767125" &&
+      allPoints.length > 0
+    ) {
       hasFittedBoundsRef.current = true;
       suppressMoveendRef.current = true;
       const bounds = (window as any).L.latLngBounds(allPoints);

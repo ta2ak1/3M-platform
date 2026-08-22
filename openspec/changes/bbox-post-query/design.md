@@ -7,12 +7,14 @@ Worker は Hono で実装されており、D1 の SQLite では `lat`/`lng` が 
 ## Goals / Non-Goals
 
 **Goals:**
+
 - `GET /api/posts` が bbox クエリパラメータで範囲絞り込みをサポートする
 - bbox なしの場合は既存動作（最新 50 件）を維持して後方互換を保つ
 - フロントが地図移動時に debounce 付きで bbox を渡して再取得する
 - D1 に `(lat, lng)` 複合インデックスを追加してクエリを高速化する
 
 **Non-Goals:**
+
 - 地理空間（GeoJSON、PostGIS 相当）の高度な演算
 - 複数の bbox を同時にクエリする
 - ページネーション（cursor/offset）の導入
@@ -20,15 +22,19 @@ Worker は Hono で実装されており、D1 の SQLite では `lat`/`lng` が 
 ## Decisions
 
 ### D1: bbox が 4 値揃った場合のみ WHERE 句を有効化
+
 4 つ全部揃わない場合は既存クエリにフォールバック。partial bbox は無効値として 400 を返さず無視する。理由: フロントがリサイズ中など過渡的な状態でパラメータが不揃いになるケースで安全に動作させたい。
 
 ### D1: `(lat, lng)` 複合インデックス
+
 SQLite は `WHERE lat BETWEEN ? AND ?` で `lat` の単独インデックスを使えるが、`lng` の絞り込みは index scan 後にフィルタされる。投稿数が数千を超えない想定では複合インデックスで十分。将来的に空間インデックスが必要になったら R2Tree 拡張を検討する。
 
 ### フロント debounce: 500ms
+
 Leaflet の `moveend` は移動完了後に 1 回しか発火しないが、ズームでも発火するため 500ms で過剰なリクエストを防ぐ。
 
 ### `limit` パラメータのデフォルト: 100、最大: 200
+
 bbox 内でも投稿が多いエリアを考慮しデフォルト 100 に引き上げ。最大 200 でレスポンスサイズを抑える。
 
 ## Risks / Trade-offs

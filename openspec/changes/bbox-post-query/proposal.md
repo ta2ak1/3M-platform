@@ -27,22 +27,27 @@
 ## Impact
 
 **API（worker/index.ts）**
+
 - `readPostsFromD1` の引数に bbox オプションを追加
 - bbox 有無で SQL を分岐
 - bbox パラメータのバリデーション（数値チェック、min < max チェック）
 
 **D1 スキーマ**
+
 - migration 0006: `CREATE INDEX idx_community_posts_lat_lng ON community_posts (lat, lng)` を追加
 - データ変更なし、後方互換あり
 
 **フロント（src/lib/api.ts）**
+
 - `fetchPosts` の引数に `bbox?: { minLat, maxLat, minLng, maxLng }` を追加
 - クエリパラメータとして URL に付加
 
 **フロント（src/App.tsx）**
+
 - Leaflet の `moveend` イベントを購読して現在ビューポートの bbox を取得
 - 500ms debounce で `fetchPosts` を再呼び出し
 - 地図の初期表示時にも bbox 付きで取得
 
 **依存関係**
+
 - 新規外部ライブラリなし

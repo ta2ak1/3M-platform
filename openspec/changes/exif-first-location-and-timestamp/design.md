@@ -7,12 +7,14 @@ D1 には migration 0005 で `captured_at`（nullable TEXT）と `location_sourc
 ## Goals / Non-Goals
 
 **Goals:**
+
 - 画像選択時に EXIF から緯度・経度・撮影日時を自動抽出してフォームに入力する
 - EXIF が取れない場合は `navigator.geolocation` → `new Date()` → デフォルト値の順にフォールバックする
 - 取得元（`locationSource`）と撮影日時（`capturedAt`）を投稿時に Worker へ送信して D1 に保存する
 - フォームに取得元バッジを表示してユーザーがデータ出所を確認できるようにする
 
 **Non-Goals:**
+
 - 地図上でのピン直接操作（既存機能は変更しない）
 - EXIF の他フィールド（カメラ機種、ISO など）の取得・保存
 - Worker 側の新しい変更（Phase 1 で対応済み）
@@ -21,17 +23,21 @@ D1 には migration 0005 で `captured_at`（nullable TEXT）と `location_sourc
 ## Decisions
 
 ### D1: `exifr` を EXIF パーサーとして採用
+
 **選択肢**: `piexifjs`、`exif-js`、`exifr`  
 **理由**: `exifr` は Tree-shakeable で GPS・日時フィールドのみの部分読み取りができる。ブラウザで動作し、async/await 対応で TypeScript 型が充実している。バンドルサイズは GPS + 日時のみ読む場合に最小化できる。
 
 ### D2: EXIF 取得は画像選択時（`onChange`）に実行する
+
 **選択肢**: プレビュー生成と同時、precheck 直前  
 **理由**: ユーザーがフォームを確認している間に非同期処理が終わる。precheck 直前に行うと UI の応答が遅くなる。
 
 ### D3: geolocation 取得はタイムアウト 5 秒で試みる
+
 **理由**: モバイルで GPS ロックに時間がかかることがある。5 秒で取れない場合は fallback に落とす。ユーザーを長時間待たせない。
 
 ### D4: `locationSource` は `"exif"` / `"device"` / `"fallback"` の 3 値のみ（Phase 1 定義済み）
+
 `"manual"` はこの変更では使わない。地図ピン操作で位置変更した際の将来拡張として予約する。
 
 ## Risks / Trade-offs

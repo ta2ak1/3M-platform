@@ -19,6 +19,7 @@ type CloudflareEnv = {
   CLOUDFLARE_API_TOKEN?: string;
   AI_GATEWAY_ACCOUNT_ID?: string;
   AI_GATEWAY_NAME?: string;
+  TURNSTILE_SECRET_KEY?: string;
 };
 
 type AppEnv = {
@@ -43,6 +44,13 @@ type PostRow = {
 
 type LocationSource = "exif" | "device" | "manual" | "fallback";
 type ContentLicense = "all-rights-reserved" | "cc-by-4.0";
+
+type TurnstileSiteverifyResponse = {
+  success?: boolean;
+  action?: string;
+  hostname?: string;
+  "error-codes"?: string[];
+};
 
 type GeoJsonSeedFeature = {
   type?: string;
@@ -190,6 +198,47 @@ function parseLocationSource(value: unknown): LocationSource {
 
 function parseContentLicense(value: unknown): ContentLicense {
   return value === "cc-by-4.0" ? "cc-by-4.0" : "all-rights-reserved";
+}
+
+async function verifyTurnstile(
+  env: CloudflareEnv,
+  token: unknown,
+  remoteIp: string | undefined,
+): Promise<boolean> {
+  if (!env.TURNSTILE_SECRET_KEY) {
+    return true;
+  }
+
+  if (typeof token !== "string" || token.length === 0 || token.length > 2048) {
+    return false;
+  }
+
+  const formData = new FormData();
+  formData.set("secret", env.TURNSTILE_SECRET_KEY);
+  formData.set("response", token);
+  formData.set("idempotency_key", crypto.randomUUID());
+  if (remoteIp) {
+    formData.set("remoteip", remoteIp);
+  }
+
+  try {
+    const response = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      {
+        method: "POST",
+        body: formData,
+      },
+    );
+    const result = (await response.json()) as TurnstileSiteverifyResponse;
+
+    if (!response.ok || !result.success) {
+      return false;
+    }
+
+    return !result.action || result.action === "community_post";
+  } catch {
+    return false;
+  }
 }
 
 function normalizeCapturedAt(value: unknown): string | undefined {
@@ -825,7 +874,7 @@ app.get("/api/posts", async (c) => {
     bbox,
     Number.isFinite(limit) ? limit : 100,
   );
-  if (dbPosts.length > 0) {
+  if (c.env.DB) {
     return c.json({ posts: dbPosts });
   }
 
@@ -898,6 +947,23 @@ app.post("/api/posts", async (c) => {
   const lng = Number(body.lng ?? 139.767125);
   const photoUrlFromBody = body.photoUrl ? String(body.photoUrl) : "";
   const file = body.photo instanceof File ? body.photo : null;
+  const turnstileToken = body["cf-turnstile-response"];
+
+  const isVerified = await verifyTurnstile(
+    c.env,
+    turnstileToken,
+    c.req.header("CF-Connecting-IP") ?? undefined,
+  );
+  if (!isVerified) {
+    return c.json(
+      {
+        ok: false,
+        error: "turnstile_failed",
+        message: "セキュリティ確認に失敗しました。再度お試しください。",
+      },
+      403,
+    );
+  }
 
   let photoUrl =
     photoUrlFromBody ||
