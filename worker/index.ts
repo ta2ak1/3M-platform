@@ -744,7 +744,14 @@ async function runModerationCheck(
   imageBuffer: ArrayBuffer,
   title: string,
   comment: string,
-): Promise<{ safe: boolean; reason?: string; serviceError?: boolean }> {
+): Promise<{
+  safe: boolean;
+  requiresReview?: boolean;
+  reason?: string;
+  detected?: string[];
+  possibleMisses?: string[];
+  serviceError?: boolean;
+}> {
   try {
     const constrainedImage = await resizeImageForAi(imageBuffer, 1200, 0.7);
     const imageDataUrl = arrayBufferToBase64DataUrl(
@@ -759,18 +766,46 @@ async function runModerationCheck(
         {
           role: "system",
           content:
-            "あなたは投稿画像の安全性を判定する審査員です。安全な画像は safe=true、危険な画像は safe=false で返してください。",
+            "あなたは公開用オープンデータ画像の安全性を判定する審査員です。公開不可、要確認、公開可を区別して JSON だけで返してください。",
         },
         {
           role: "user",
           content: `
-            次の画像とコメントを確認し、公開投稿に適さない場合は safe=false としてください。
-            ルール:
-            - 性的、暴力的、差別的、露骨な表現は unsafe
-            - 風景や食事、自然景観、街並みのような通常の投稿は safe
-            - コメントと写真の関係が不自然なら注意
+            次の画像を公開用オープンデータ画像として確認してください。
+            目的は「個人・組織・店舗・商品・場所が特定できる可能性」を人が確認できるようにすることです。
+
+            明確に公開不可なものは safe=false:
+            - 性的、暴力的、差別的、露骨な表現
+            - 危険行為、嫌がらせ、犯罪を助長する内容
+
+            次の情報が視認または推測できる場合は safe=true かつ requiresReview=true:
+            - 顔
+            - 人物
+            - 名札
+            - 社名
+            - 店舗名
+            - 商品名
+            - ブランドロゴ
+            - QRコード
+            - バーコード
+            - ナンバープレート
+            - 電話番号
+            - メールアドレス
+            - 地名
+            - 建物名
+            - PC画面
+            - ホワイトボード記載内容
+
+            特定につながる情報が見当たらず、通常の風景・自然・公園・空・植物・一般的な街並みであれば safe=true かつ requiresReview=false。
+
             出力は必ず JSON で以下の形式にしてください:
-            { "safe": true|false, "reason": "短い理由" }
+            {
+              "safe": true|false,
+              "requiresReview": true|false,
+              "reason": "短い理由",
+              "detected": ["検出した項目"],
+              "possibleMisses": ["見落としの可能性がある箇所"]
+            }
 
             タイトル: ${title}
             コメント: ${comment}
@@ -787,10 +822,30 @@ async function runModerationCheck(
       (typeof safeValue === "string" && safeValue.toLowerCase() === "true");
 
     const reason = extractReasonFromParsedResult(parsed);
+    const requiresReviewValue = parsed.requiresReview ?? parsed.requires_review;
+    const requiresReview =
+      requiresReviewValue === true ||
+      (typeof requiresReviewValue === "string" &&
+        requiresReviewValue.toLowerCase() === "true");
+    const detected = Array.isArray(parsed.detected)
+      ? parsed.detected.filter((item): item is string => typeof item === "string")
+      : [];
+    const possibleMisses = Array.isArray(parsed.possibleMisses)
+      ? parsed.possibleMisses.filter(
+          (item): item is string => typeof item === "string",
+        )
+      : Array.isArray(parsed.possible_misses)
+        ? parsed.possible_misses.filter(
+            (item): item is string => typeof item === "string",
+          )
+        : [];
 
     return {
       safe,
+      requiresReview,
       reason,
+      detected,
+      possibleMisses,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -798,6 +853,7 @@ async function runModerationCheck(
     if (message.includes("image_too_large_for_ai")) {
       return {
         safe: false,
+        requiresReview: false,
         reason:
           "画像サイズが大きすぎます。もう少し小さな写真で再度お試しください。",
       };
@@ -809,6 +865,7 @@ async function runModerationCheck(
     ) {
       return {
         safe: false,
+        requiresReview: false,
         reason:
           "画像が大きすぎるため、AI 判定ができませんでした。画像をもう少し小さくして再度お試しください。",
       };
@@ -817,6 +874,7 @@ async function runModerationCheck(
     return {
       // Fail-open on transient AI service failures; user performs final human review.
       safe: true,
+      requiresReview: true,
       serviceError: true,
       reason: `AI 判定サービスが応答できませんでした（${message}）。画像を別のものにして再度お試しください。`,
     };
@@ -1112,12 +1170,26 @@ app.post("/api/posts/precheck", async (c) => {
           title || draft.title,
           comment || draft.summary,
         );
-  const warnings = moderation.serviceError
-    ? [
-        moderation.reason ??
-          "AI 判定サービスが一時的に不安定です。内容を確認して投稿してください。",
-      ]
-    : [];
+  const warnings = [
+    ...(moderation.requiresReview
+      ? [
+          moderation.reason ??
+            "画像に公開前確認が必要な情報が含まれる可能性があります。",
+        ]
+      : []),
+    ...(moderation.detected && moderation.detected.length > 0
+      ? [`検出候補: ${moderation.detected.join("、")}`]
+      : []),
+    ...(moderation.possibleMisses && moderation.possibleMisses.length > 0
+      ? [`見落とし注意: ${moderation.possibleMisses.join("、")}`]
+      : []),
+    ...(moderation.serviceError
+      ? [
+          moderation.reason ??
+            "AI 判定サービスが一時的に不安定です。内容を確認して投稿してください。",
+        ]
+      : []),
+  ];
 
   return c.json({
     ok: true,
@@ -1126,7 +1198,8 @@ app.post("/api/posts/precheck", async (c) => {
     summary: comment || draft.summary,
     tags,
     warnings,
-    requiresReview: moderation.serviceError === true,
+    requiresReview:
+      moderation.requiresReview === true || moderation.serviceError === true,
   });
 });
 

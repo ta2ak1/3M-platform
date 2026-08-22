@@ -78,6 +78,8 @@ export async function precheckPost(formData: FormData): Promise<{
   title?: string;
   summary?: string;
   tags: string[];
+  warnings?: string[];
+  requiresReview?: boolean;
   message?: string;
 }> {
   const response = await fetch(`${API_BASE}/posts/precheck`, {
@@ -90,6 +92,8 @@ export async function precheckPost(formData: FormData): Promise<{
     title?: string;
     summary?: string;
     tags?: string[];
+    warnings?: string[];
+    requiresReview?: boolean;
     message?: string;
     reason?: string;
     error?: string;
@@ -109,6 +113,10 @@ export async function precheckPost(formData: FormData): Promise<{
     title: typeof payload.title === "string" ? payload.title : undefined,
     summary: typeof payload.summary === "string" ? payload.summary : undefined,
     tags: Array.isArray(payload.tags) ? payload.tags : [],
+    warnings: Array.isArray(payload.warnings)
+      ? payload.warnings.filter((item): item is string => typeof item === "string")
+      : [],
+    requiresReview: payload.requiresReview === true,
   };
 }
 

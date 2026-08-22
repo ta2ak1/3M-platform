@@ -166,6 +166,7 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
   );
   const [errorMessage, setErrorMessage] = useState("");
   const [reviewMessage, setReviewMessage] = useState("");
+  const [reviewWarnings, setReviewWarnings] = useState<string[]>([]);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -194,6 +195,7 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
   const resetReviewState = (nextMessage?: string) => {
     setReviewStep("editing");
     setReviewMessage("");
+    setReviewWarnings([]);
     setSuggestedTags([]);
     if (nextMessage) {
       setErrorMessage(nextMessage);
@@ -213,6 +215,7 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
   const resetDraft = (nextMessage?: string) => {
     setReviewStep("editing");
     setReviewMessage("");
+    setReviewWarnings([]);
     setSuggestedTags([]);
     setSelectedTags([]);
     setTurnstileToken("");
@@ -268,11 +271,14 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
         setSummary(precheckResult.summary);
       }
       setSuggestedTags(nextTags);
+      setReviewWarnings(precheckResult.warnings ?? []);
       setSelectedTags((current) =>
         normalizeTags(current.length > 0 ? current : nextTags),
       );
       setReviewMessage(
-        postMode === "photo"
+        precheckResult.requiresReview
+          ? "AIが公開前に確認したい点を検出しました。内容を確認してから投稿してください。"
+          : postMode === "photo"
           ? "写真から作った下書きです。内容を確認して編集できます。"
           : "文章からタグ候補を作りました。内容を確認して投稿できます。",
       );
@@ -339,6 +345,7 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       setSummary("");
       setPhotoFile(null);
       setSuggestedTags([]);
+      setReviewWarnings([]);
       setSelectedTags([]);
       setTagInput("");
       setHasAcceptedPostTerms(false);
@@ -555,6 +562,19 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
                 </p>
                 <p className="mt-1 text-sm text-slate-700">{reviewMessage}</p>
               </div>
+
+              {reviewWarnings.length > 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <div className="text-sm font-semibold text-amber-800">
+                    公開前に確認してください
+                  </div>
+                  <ul className="mt-2 space-y-1 text-xs leading-5 text-amber-800">
+                    {reviewWarnings.map((warning) => (
+                      <li key={warning}>・{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               <div className="rounded-xl border border-emerald-100 bg-white p-3">
                 <div className="text-sm font-semibold text-slate-800">
