@@ -28,10 +28,10 @@ async function loadLeaflet(): Promise<typeof Leaflet> {
 function createCommunityPostIcon(L: typeof Leaflet) {
   return L.divIcon({
     className: "community-post-marker",
-    html: '<span class="community-post-marker__triangle"></span>',
-    iconSize: [28, 24],
-    iconAnchor: [14, 24],
-    popupAnchor: [0, -24],
+    html: '<span class="community-post-marker__head"><span class="community-post-marker__dot"></span></span>',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -18],
   });
 }
 
@@ -353,5 +353,33 @@ export function PostMap({
     marker.openPopup();
   }, [selectedPostId]);
 
-  return <div ref={mapContainerRef} className={"h-full w-full"} />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={mapContainerRef} className={"h-full w-full"} />
+      <div
+        className="absolute right-3 bottom-3 z-[400] rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg shadow-slate-900/10 backdrop-blur"
+        aria-label="地図の凡例"
+      >
+        <p className="mb-2 font-bold text-slate-900">凡例</p>
+        <ul className="space-y-1.5">
+          <li className="flex items-center gap-2">
+            <span className="legend-marker legend-marker--community" />
+            <span>市民投稿</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="legend-marker legend-marker--admin" />
+            <span>行政データ</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="legend-marker legend-marker--current" />
+            <span>現在地</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="legend-marker legend-marker--draft" />
+            <span>投稿位置</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
 }
