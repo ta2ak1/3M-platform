@@ -226,6 +226,37 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
     }
   };
 
+  const clearFileInput = () => {
+    const fileInput = document.getElementById(
+      "post-photo",
+    ) as HTMLInputElement | null;
+    if (fileInput) {
+      fileInput.value = "";
+    }
+  };
+
+  const resetForm = () => {
+    setTitle("");
+    setSummary("");
+    setPhotoFile(null);
+    setLocationSource("fallback");
+    setCapturedAt(undefined);
+    setResolvedLat(undefined);
+    setResolvedLng(undefined);
+    setSuggestedTags([]);
+    setReviewWarnings([]);
+    setSelectedTags([]);
+    setTagInput("");
+    setHasAcceptedPostTerms(false);
+    setIsCcByLicensed(false);
+    setTurnstileToken("");
+    setTurnstileResetKey((current) => current + 1);
+    setReviewStep("editing");
+    setReviewMessage("");
+    setErrorMessage("");
+    clearFileInput();
+  };
+
   const handlePrecheck = async () => {
     if (postMode === "photo" && !photoFile) {
       setErrorMessage("投稿する写真を選択してください。");
@@ -354,12 +385,7 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       setTurnstileResetKey((current) => current + 1);
       setReviewStep("editing");
       setReviewMessage("");
-      const fileInput = document.getElementById(
-        "post-photo",
-      ) as HTMLInputElement | null;
-      if (fileInput) {
-        fileInput.value = "";
-      }
+      clearFileInput();
     } finally {
       if (turnstileEnabled) {
         setTurnstileToken("");
@@ -403,12 +429,7 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
                 setCapturedAt(undefined);
                 setResolvedLat(undefined);
                 setResolvedLng(undefined);
-                const fileInput = document.getElementById(
-                  "post-photo",
-                ) as HTMLInputElement | null;
-                if (fileInput) {
-                  fileInput.value = "";
-                }
+                clearFileInput();
               }
             }}
             className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
@@ -790,6 +811,16 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
           className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
         >
           編集に戻る
+        </button>
+      ) : null}
+
+      {reviewStep === "reviewing" ? (
+        <button
+          type="button"
+          onClick={resetForm}
+          className="w-full rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+        >
+          投稿をやめてフォームをリセットする
         </button>
       ) : null}
     </form>
