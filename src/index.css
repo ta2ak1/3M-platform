@@ -36,19 +36,52 @@ body {
 .community-post-marker {
   align-items: center;
   background: #ffffff;
-  border: 3px solid #f59e0b;
-  border-radius: 9999px;
-  box-shadow: 0 6px 16px rgb(15 23 42 / 0.24);
+  border: 2px solid #f97316;
+  border-radius: 9999px 9999px 9999px 6px;
+  box-shadow: 0 8px 18px rgb(15 23 42 / 0.24);
   display: flex;
   justify-content: center;
+  transform: rotate(-45deg);
 }
 
-.community-post-marker__dot {
-  background: #f97316;
+.community-post-marker__glyph {
+  align-items: center;
+  color: #c2410c;
+  display: flex;
+  font-size: 10px;
+  font-weight: 700;
+  height: 100%;
+  justify-content: center;
+  line-height: 1;
+  transform: rotate(45deg);
+  width: 100%;
+}
+
+.current-location-marker {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.current-location-marker__pulse {
+  background: rgb(37 99 235 / 0.18);
+  border: 1px solid rgb(37 99 235 / 0.35);
   border-radius: 9999px;
+  height: 34px;
+  position: absolute;
+  width: 34px;
+}
+
+.current-location-marker__dot {
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 4px 14px rgb(37 99 235 / 0.45);
   display: block;
-  height: 12px;
-  width: 12px;
+  height: 16px;
+  position: relative;
+  width: 16px;
 }
 
 img {

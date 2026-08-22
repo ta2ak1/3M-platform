@@ -27,10 +27,20 @@ async function loadLeaflet(): Promise<typeof Leaflet> {
 function createCommunityPostIcon(L: typeof Leaflet) {
   return L.divIcon({
     className: "community-post-marker",
-    html: '<span class="community-post-marker__dot"></span>',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -16],
+    html: '<span class="community-post-marker__glyph">投稿</span>',
+    iconSize: [48, 30],
+    iconAnchor: [24, 30],
+    popupAnchor: [0, -30],
+  });
+}
+
+function createCurrentLocationIcon(L: typeof Leaflet) {
+  return L.divIcon({
+    className: "current-location-marker",
+    html: '<span class="current-location-marker__pulse"></span><span class="current-location-marker__dot"></span>',
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -18],
   });
 }
 
@@ -47,6 +57,7 @@ export function PostMap({
   const markerLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const markerMapRef = useRef<Map<string, Leaflet.Marker>>(new Map());
   const adminMarkerLayerRef = useRef<Leaflet.LayerGroup | null>(null);
+  const currentLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   // fitBounds による moveend で再取得ループを防ぐ
   const suppressMoveendRef = useRef(false);
@@ -101,6 +112,7 @@ export function PostMap({
 
       markerLayerRef.current = L.layerGroup().addTo(map);
       adminMarkerLayerRef.current = L.layerGroup().addTo(map);
+      currentLocationLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
       setIsReady(true);
 
@@ -146,6 +158,7 @@ export function PostMap({
       mapRef.current = null;
       markerLayerRef.current = null;
       adminMarkerLayerRef.current = null;
+      currentLocationLayerRef.current = null;
       markerMapRef.current.clear();
     };
   }, [onLocationPick]);
@@ -175,6 +188,22 @@ export function PostMap({
       });
     });
   }, [initialCenter.lat, initialCenter.lng, isReady, onBoundsChange]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = currentLocationLayerRef.current;
+    if (!map || !layer || !isReady) {
+      return;
+    }
+
+    const L = (window as any).L as typeof Leaflet;
+    layer.clearLayers();
+    L.marker([initialCenter.lat, initialCenter.lng], {
+      icon: createCurrentLocationIcon(L),
+      interactive: false,
+      keyboard: false,
+    }).addTo(layer);
+  }, [initialCenter.lat, initialCenter.lng, isReady]);
 
   const normalizedPosts = useMemo(
     () =>
