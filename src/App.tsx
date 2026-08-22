@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PostForm } from "./components/PostForm";
 import { PostMap } from "./components/PostMap";
 import { LegalNotice } from "./components/LegalNotice";
+import { InstallPrompt } from "./components/InstallPrompt";
 import { fetchAdminPlaces, fetchPosts, submitPost } from "./lib/api";
 import type { BboxQuery } from "./lib/api";
 import type { AdminPlace, CommunityPost } from "./types";
@@ -363,6 +364,7 @@ function App() {
         </div>
       </main>
       <LegalNotice />
+      <InstallPrompt />
     </div>
   );
 }
