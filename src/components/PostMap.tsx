@@ -27,10 +27,10 @@ async function loadLeaflet(): Promise<typeof Leaflet> {
 function createCommunityPostIcon(L: typeof Leaflet) {
   return L.divIcon({
     className: "community-post-marker",
-    html: '<span class="community-post-marker__glyph">投稿</span>',
-    iconSize: [48, 30],
-    iconAnchor: [24, 30],
-    popupAnchor: [0, -30],
+    html: '<span class="community-post-marker__head"><span class="community-post-marker__dot"></span></span><span class="community-post-marker__tip"></span>',
+    iconSize: [30, 40],
+    iconAnchor: [15, 40],
+    popupAnchor: [0, -38],
   });
 }
 
