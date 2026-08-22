@@ -7,14 +7,17 @@ import type { BboxQuery } from "./lib/api";
 import type { AdminPlace, CommunityPost } from "./types";
 
 const DEFAULT_LOCATION = { lat: 35.681236, lng: 139.767125 };
+type Location = typeof DEFAULT_LOCATION;
 
 function App() {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [adminPlaces, setAdminPlaces] = useState<AdminPlace[]>([]);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [formLocation, setFormLocation] = useState(DEFAULT_LOCATION);
+  const [formLocation, setFormLocation] = useState<Location | null>(null);
   const [initialMapLocation, setInitialMapLocation] =
-    useState(DEFAULT_LOCATION);
+    useState<Location | null>(null);
+  const [isResolvingInitialLocation, setIsResolvingInitialLocation] =
+    useState(true);
   const [seedCount, setSeedCount] = useState(0);
   const [visibleSeedCount, setVisibleSeedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,6 +62,9 @@ function App() {
 
   useEffect(() => {
     if (!navigator.geolocation) {
+      setInitialMapLocation(DEFAULT_LOCATION);
+      setFormLocation(DEFAULT_LOCATION);
+      setIsResolvingInitialLocation(false);
       return;
     }
 
@@ -70,9 +76,12 @@ function App() {
         };
         setInitialMapLocation(nextLocation);
         setFormLocation(nextLocation);
+        setIsResolvingInitialLocation(false);
       },
       () => {
-        // 位置情報を取得できない場合は東京駅を起点にします。
+        setInitialMapLocation(DEFAULT_LOCATION);
+        setFormLocation(DEFAULT_LOCATION);
+        setIsResolvingInitialLocation(false);
       },
       { timeout: 5000, enableHighAccuracy: false },
     );
@@ -307,15 +316,21 @@ function App() {
                 </span>
               </div>
               <div className="h-[540px] w-full">
-                <PostMap
-                  posts={posts}
-                  adminPlaces={adminPlaces}
-                  initialCenter={initialMapLocation}
-                  selectedPostId={selectedPostId}
-                  onSelectPost={handleSelectPost}
-                  onLocationPick={handleLocationPick}
-                  onBoundsChange={handleBoundsChange}
-                />
+                {isResolvingInitialLocation || !initialMapLocation ? (
+                  <div className="flex h-full w-full items-center justify-center bg-slate-50 text-sm text-slate-500">
+                    現在地を確認しています...
+                  </div>
+                ) : (
+                  <PostMap
+                    posts={posts}
+                    adminPlaces={adminPlaces}
+                    initialCenter={initialMapLocation}
+                    selectedPostId={selectedPostId}
+                    onSelectPost={handleSelectPost}
+                    onLocationPick={handleLocationPick}
+                    onBoundsChange={handleBoundsChange}
+                  />
+                )}
               </div>
             </div>
 
@@ -330,13 +345,15 @@ function App() {
                   </h2>
                 </div>
                 <div className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  {formLocation.lat.toFixed(5)}, {formLocation.lng.toFixed(5)}
+                  {formLocation
+                    ? `${formLocation.lat.toFixed(5)}, ${formLocation.lng.toFixed(5)}`
+                    : "現在地を確認中..."}
                 </div>
               </div>
 
               <PostForm
                 onSubmit={handleSubmit}
-                defaultLocation={formLocation}
+                defaultLocation={formLocation ?? DEFAULT_LOCATION}
               />
             </div>
           </section>
