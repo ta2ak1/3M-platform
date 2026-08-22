@@ -778,7 +778,7 @@ async function runModerationCheck(
             - 性的、暴力的、差別的、露骨な表現
             - 危険行為、嫌がらせ、犯罪を助長する内容
 
-            次の情報が視認または推測できる場合は safe=true かつ requiresReview=true:
+            次の情報が少しでも視認または推測できる場合は safe=true かつ requiresReview=true:
             - 顔
             - 人物
             - 名札
@@ -795,6 +795,10 @@ async function runModerationCheck(
             - 建物名
             - PC画面
             - ホワイトボード記載内容
+
+            顔や人物は、小さい、遠い、横顔、後ろ姿、ぼやけている、一部だけ写っている場合でも requiresReview=true。
+            画像内に人間らしい輪郭、頭部、手足、服装、肌色領域が見える場合は requiresReview=true。
+            特定できるか判断に迷う場合も requiresReview=true。
 
             特定につながる情報が見当たらず、通常の風景・自然・公園・空・植物・一般的な街並みであれば safe=true かつ requiresReview=false。
 
