@@ -804,19 +804,6 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
       {reviewStep === "reviewing" ? (
         <button
           type="button"
-          onClick={() => {
-            setReviewStep("editing");
-            setReviewMessage("");
-          }}
-          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-        >
-          編集に戻る
-        </button>
-      ) : null}
-
-      {reviewStep === "reviewing" ? (
-        <button
-          type="button"
           onClick={resetForm}
           className="w-full rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
         >
