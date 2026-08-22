@@ -33,6 +33,24 @@ body {
   height: 100%;
 }
 
+.community-post-marker {
+  align-items: center;
+  background: #ffffff;
+  border: 3px solid #f59e0b;
+  border-radius: 9999px;
+  box-shadow: 0 6px 16px rgb(15 23 42 / 0.24);
+  display: flex;
+  justify-content: center;
+}
+
+.community-post-marker__dot {
+  background: #f97316;
+  border-radius: 9999px;
+  display: block;
+  height: 12px;
+  width: 12px;
+}
+
 img {
   max-width: 100%;
   display: block;

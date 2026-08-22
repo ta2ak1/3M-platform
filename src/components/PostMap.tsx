@@ -24,6 +24,16 @@ async function loadLeaflet(): Promise<typeof Leaflet> {
   return L;
 }
 
+function createCommunityPostIcon(L: typeof Leaflet) {
+  return L.divIcon({
+    className: "community-post-marker",
+    html: '<span class="community-post-marker__dot"></span>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -16],
+  });
+}
+
 export function PostMap({
   posts,
   adminPlaces = [],
@@ -192,9 +202,12 @@ export function PostMap({
 
     const nextMarkers = new Map<string, Leaflet.Marker>();
     layer.clearLayers();
+    const postIcon = createCommunityPostIcon((window as any).L);
 
     normalizedPosts.forEach((post) => {
-      const marker = (window as any).L.marker([post.lat, post.lng]).bindPopup(`
+      const marker = (window as any).L.marker([post.lat, post.lng], {
+        icon: postIcon,
+      }).bindPopup(`
           <div style="min-width:180px; max-width:220px;">
             <strong>${post.title}</strong>
             <div style="margin:8px 0;">${post.summary}</div>
