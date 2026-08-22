@@ -36,23 +36,50 @@ body {
 .community-post-marker {
   align-items: center;
   display: flex;
+  justify-content: center;
+}
+
+.community-post-marker__triangle {
+  border-left: 14px solid transparent;
+  border-right: 14px solid transparent;
+  border-top: 24px solid #f97316;
+  display: block;
+  filter: drop-shadow(0 6px 8px rgb(15 23 42 / 0.28));
+  height: 0;
+  position: relative;
+  width: 0;
+}
+
+.community-post-marker__triangle::after {
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 11px solid rgb(255 255 255 / 0.9);
+  content: "";
+  left: -6px;
+  position: absolute;
+  top: -19px;
+}
+
+.draft-location-marker {
+  align-items: center;
+  display: flex;
   flex-direction: column;
   justify-content: center;
 }
 
-.community-post-marker__head {
+.draft-location-marker__head {
   align-items: center;
-  background: #f97316;
+  background: #7c3aed;
   border: 3px solid #ffffff;
   border-radius: 9999px;
-  box-shadow: 0 7px 16px rgb(15 23 42 / 0.28);
+  box-shadow: 0 7px 16px rgb(76 29 149 / 0.32);
   display: flex;
   height: 30px;
   justify-content: center;
   width: 30px;
 }
 
-.community-post-marker__dot {
+.draft-location-marker__dot {
   background: #ffffff;
   border-radius: 9999px;
   display: block;
@@ -61,10 +88,10 @@ body {
   width: 8px;
 }
 
-.community-post-marker__tip {
+.draft-location-marker__tip {
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
-  border-top: 10px solid #f97316;
+  border-top: 10px solid #7c3aed;
   display: block;
   filter: drop-shadow(0 4px 4px rgb(15 23 42 / 0.18));
   height: 0;

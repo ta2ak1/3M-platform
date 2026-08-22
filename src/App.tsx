@@ -325,6 +325,9 @@ function App() {
                     posts={posts}
                     adminPlaces={adminPlaces}
                     initialCenter={initialMapLocation}
+                    draftLocation={
+                      selectedPostId ? undefined : formLocation ?? undefined
+                    }
                     selectedPostId={selectedPostId}
                     onSelectPost={handleSelectPost}
                     onLocationPick={handleLocationPick}

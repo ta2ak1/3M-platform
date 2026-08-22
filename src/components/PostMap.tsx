@@ -7,6 +7,7 @@ interface PostMapProps {
   posts: CommunityPost[];
   adminPlaces?: AdminPlace[];
   initialCenter?: { lat: number; lng: number };
+  draftLocation?: { lat: number; lng: number };
   selectedPostId?: string | null;
   onSelectPost?: (post: CommunityPost | null) => void;
   onLocationPick?: (location: { lat: number; lng: number }) => void;
@@ -27,7 +28,17 @@ async function loadLeaflet(): Promise<typeof Leaflet> {
 function createCommunityPostIcon(L: typeof Leaflet) {
   return L.divIcon({
     className: "community-post-marker",
-    html: '<span class="community-post-marker__head"><span class="community-post-marker__dot"></span></span><span class="community-post-marker__tip"></span>',
+    html: '<span class="community-post-marker__triangle"></span>',
+    iconSize: [28, 24],
+    iconAnchor: [14, 24],
+    popupAnchor: [0, -24],
+  });
+}
+
+function createDraftLocationIcon(L: typeof Leaflet) {
+  return L.divIcon({
+    className: "draft-location-marker",
+    html: '<span class="draft-location-marker__head"><span class="draft-location-marker__dot"></span></span><span class="draft-location-marker__tip"></span>',
     iconSize: [30, 40],
     iconAnchor: [15, 40],
     popupAnchor: [0, -38],
@@ -48,6 +59,7 @@ export function PostMap({
   posts,
   adminPlaces = [],
   initialCenter = { lat: 35.681236, lng: 139.767125 },
+  draftLocation,
   selectedPostId,
   onSelectPost,
   onLocationPick,
@@ -58,6 +70,7 @@ export function PostMap({
   const markerMapRef = useRef<Map<string, Leaflet.Marker>>(new Map());
   const adminMarkerLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const currentLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
+  const draftLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   // fitBounds による moveend で再取得ループを防ぐ
   const suppressMoveendRef = useRef(false);
@@ -113,6 +126,7 @@ export function PostMap({
       markerLayerRef.current = L.layerGroup().addTo(map);
       adminMarkerLayerRef.current = L.layerGroup().addTo(map);
       currentLocationLayerRef.current = L.layerGroup().addTo(map);
+      draftLocationLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
       setIsReady(true);
 
@@ -159,6 +173,7 @@ export function PostMap({
       markerLayerRef.current = null;
       adminMarkerLayerRef.current = null;
       currentLocationLayerRef.current = null;
+      draftLocationLayerRef.current = null;
       markerMapRef.current.clear();
     };
   }, [onLocationPick]);
@@ -204,6 +219,32 @@ export function PostMap({
       keyboard: false,
     }).addTo(layer);
   }, [initialCenter.lat, initialCenter.lng, isReady]);
+
+  useEffect(() => {
+    const layer = draftLocationLayerRef.current;
+    if (!layer || !isReady) {
+      return;
+    }
+
+    const L = (window as any).L as typeof Leaflet;
+    layer.clearLayers();
+
+    if (!draftLocation) {
+      return;
+    }
+
+    L.marker([draftLocation.lat, draftLocation.lng], {
+      icon: createDraftLocationIcon(L),
+      interactive: false,
+      keyboard: false,
+    })
+      .bindTooltip("投稿位置", {
+        direction: "top",
+        offset: [0, -32],
+        opacity: 0.92,
+      })
+      .addTo(layer);
+  }, [draftLocation?.lat, draftLocation?.lng, isReady]);
 
   const normalizedPosts = useMemo(
     () =>
