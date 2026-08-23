@@ -169,7 +169,7 @@ async function readPostsFromD1(
     return [];
   }
 
-  const safeLimit = Math.min(Math.max(1, limit), 200);
+  const safeLimit = Math.min(Math.max(1, limit), 1000);
 
   const SELECT =
     "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, captured_at AS capturedAt, location_source AS locationSource, content_license AS contentLicense, tags, ai_tags AS aiTags, human_tags AS humanTags FROM community_posts";
@@ -183,7 +183,8 @@ async function readPostsFromD1(
           .bind(bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng, safeLimit)
           .all<PostRow>()
       : await db
-          .prepare(`${SELECT} ORDER BY created_at DESC LIMIT 50`)
+          .prepare(`${SELECT} ORDER BY created_at DESC LIMIT ?`)
+          .bind(safeLimit)
           .all<PostRow>();
 
   return (results.results ?? []).map((row) => ({
@@ -353,7 +354,7 @@ async function readSeedPlacesFromD1(
   bbox?: BboxParams,
   limit = 500,
 ): Promise<{ count: number; places: AdminPlace[] }> {
-  const safeLimit = Math.min(Math.max(1, limit), 1000);
+  const safeLimit = Math.min(Math.max(1, limit), 10000);
 
   if (!db) {
     const filteredPlaces = bbox

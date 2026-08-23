@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchAdminPlaces, fetchPosts } from "../lib/api";
 import type { AdminPlace, CommunityPost } from "../types";
 
 type DataUsePanelProps = {
@@ -13,6 +14,11 @@ type NearbyPair = {
   place: AdminPlace;
   distanceMeters: number;
 };
+
+type InsightScope = "visible" | "all";
+
+const ALL_DATA_LIMIT = 10000;
+const ALL_POST_LIMIT = 1000;
 
 function getPostTags(post: CommunityPost) {
   return post.humanTags ?? post.tags ?? [];
@@ -122,9 +128,75 @@ export function DataUsePanel({
   seedCount,
   visibleSeedCount,
 }: DataUsePanelProps) {
+  const [scope, setScope] = useState<InsightScope>("visible");
+  const [allPosts, setAllPosts] = useState<CommunityPost[] | null>(null);
+  const [allAdminPlaces, setAllAdminPlaces] = useState<AdminPlace[] | null>(
+    null,
+  );
+  const [allSeedCount, setAllSeedCount] = useState<number | null>(null);
+  const [isLoadingAllData, setIsLoadingAllData] = useState(false);
+  const [allDataError, setAllDataError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (
+      scope !== "all" ||
+      (allPosts != null && allAdminPlaces != null) ||
+      isLoadingAllData
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAllData = async () => {
+      setIsLoadingAllData(true);
+      setAllDataError(null);
+
+      try {
+        const [nextPosts, nextAdminPlacesResponse] = await Promise.all([
+          fetchPosts(undefined, { limit: ALL_POST_LIMIT }),
+          fetchAdminPlaces(undefined, { limit: ALL_DATA_LIMIT }),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setAllPosts(nextPosts);
+        setAllAdminPlaces(nextAdminPlacesResponse.places);
+        setAllSeedCount(nextAdminPlacesResponse.count);
+      } catch {
+        if (!cancelled) {
+          setAllDataError(
+            "全件データの取得に失敗しました。表示範囲のデータで確認してください。",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingAllData(false);
+        }
+      }
+    };
+
+    void loadAllData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allAdminPlaces, allPosts, isLoadingAllData, scope]);
+
+  const hasAllData = allPosts != null && allAdminPlaces != null;
+  const usesAllData = scope === "all" && hasAllData;
+  const activePosts = usesAllData ? allPosts : posts;
+  const activeAdminPlaces = usesAllData ? allAdminPlaces : adminPlaces;
+  const activeSeedCount = usesAllData ? (allSeedCount ?? seedCount) : seedCount;
+  const activeVisibleSeedCount =
+    usesAllData ? allAdminPlaces.length : visibleSeedCount;
+  const activeScopeLabel = usesAllData ? "全件データ" : "表示範囲";
+
   const tagRanking = useMemo(() => {
     const tagCounts = new Map<string, number>();
-    posts.forEach((post) => {
+    activePosts.forEach((post) => {
       getPostTags(post).forEach((tag) => {
         tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
       });
@@ -134,20 +206,20 @@ export function DataUsePanel({
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, "ja"))
       .slice(0, 8);
-  }, [posts]);
+  }, [activePosts]);
 
   const uniqueTagCount = useMemo(() => {
     const tags = new Set<string>();
-    posts.forEach((post) => {
+    activePosts.forEach((post) => {
       getPostTags(post).forEach((tag) => tags.add(tag));
     });
     return tags.size;
-  }, [posts]);
+  }, [activePosts]);
 
   const nearbyPairs = useMemo<NearbyPair[]>(() => {
-    return posts
+    return activePosts
       .map((post) => {
-        const nearestPlace = adminPlaces
+        const nearestPlace = activeAdminPlaces
           .map((place) => ({
             post,
             place,
@@ -160,16 +232,16 @@ export function DataUsePanel({
       .filter((pair): pair is NearbyPair => Boolean(pair))
       .sort((a, b) => a.distanceMeters - b.distanceMeters)
       .slice(0, 5);
-  }, [adminPlaces, posts]);
+  }, [activeAdminPlaces, activePosts]);
 
-  const ccByPostCount = posts.filter(
+  const ccByPostCount = activePosts.filter(
     (post) => post.contentLicense === "cc-by-4.0",
   ).length;
 
   const handleDownloadCsv = () => {
     downloadTextFile(
       "3m-community-posts.csv",
-      buildPostsCsv(posts),
+      buildPostsCsv(activePosts),
       "text/csv;charset=utf-8",
     );
   };
@@ -177,7 +249,7 @@ export function DataUsePanel({
   const handleDownloadGeoJson = () => {
     downloadTextFile(
       "3m-community-posts.geojson",
-      buildPostsGeoJson(posts),
+      buildPostsGeoJson(activePosts),
       "application/geo+json;charset=utf-8",
     );
   };
@@ -202,7 +274,7 @@ export function DataUsePanel({
             <button
               type="button"
               onClick={handleDownloadCsv}
-              disabled={posts.length === 0}
+              disabled={activePosts.length === 0}
               className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary-strong disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               CSVをダウンロード
@@ -210,20 +282,65 @@ export function DataUsePanel({
             <button
               type="button"
               onClick={handleDownloadGeoJson}
-              disabled={posts.length === 0}
+              disabled={activePosts.length === 0}
               className="rounded-full border border-primary/30 bg-white px-4 py-2 text-sm font-bold text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
             >
               GeoJSONをダウンロード
             </button>
           </div>
         </div>
+
+        <div className="mt-5 rounded-2xl bg-slate-50 p-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setScope("visible")}
+              className={`rounded-xl px-4 py-3 text-left transition ${
+                scope === "visible"
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-slate-600 hover:bg-white/70"
+              }`}
+            >
+              <span className="block text-sm font-bold">表示範囲で集計</span>
+              <span className="mt-1 block text-xs">
+                いま地図で読み込んでいる範囲を見る
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope("all")}
+              className={`rounded-xl px-4 py-3 text-left transition ${
+                scope === "all"
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-slate-600 hover:bg-white/70"
+              }`}
+            >
+              <span className="block text-sm font-bold">全件データで集計</span>
+              <span className="mt-1 block text-xs">
+                投稿と行政データを全体傾向として見る
+              </span>
+            </button>
+          </div>
+          {isLoadingAllData ? (
+            <p className="mt-2 px-2 text-xs text-slate-500">
+              全件データを読み込んでいます…
+            </p>
+          ) : null}
+          {allDataError ? (
+            <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {allDataError}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-          <p className="text-sm font-semibold text-slate-500">市民投稿</p>
+          <p className="text-sm font-semibold text-slate-500">
+            市民投稿（{activeScopeLabel}）
+          </p>
           <p className="mt-2 text-3xl font-bold text-slate-900">
-            {posts.length.toLocaleString("ja-JP")}件
+            {activePosts.length.toLocaleString("ja-JP")}件
           </p>
           <p className="mt-2 text-xs leading-5 text-slate-500">
             地域の気づきとして蓄積された投稿数です。
@@ -234,10 +351,10 @@ export function DataUsePanel({
             行政オープンデータ
           </p>
           <p className="mt-2 text-3xl font-bold text-slate-900">
-            {visibleSeedCount.toLocaleString("ja-JP")}件
+            {activeVisibleSeedCount.toLocaleString("ja-JP")}件
           </p>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            全{seedCount.toLocaleString("ja-JP")}件のうち、現在表示中の件数です。
+            全{activeSeedCount.toLocaleString("ja-JP")}件のうち、集計対象の件数です。
           </p>
         </div>
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">

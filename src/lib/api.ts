@@ -10,19 +10,31 @@ export type BboxQuery = {
   maxLng: number;
 };
 
-function buildBboxUrl(path: string, bbox?: BboxQuery): string {
-  if (!bbox) {
-    return `${API_BASE}${path}`;
+type FetchOptions = {
+  limit?: number;
+};
+
+function buildBboxUrl(
+  path: string,
+  bbox?: BboxQuery,
+  options?: FetchOptions,
+): string {
+  const params = new URLSearchParams();
+
+  if (bbox) {
+    params.set("minLat", String(bbox.minLat));
+    params.set("maxLat", String(bbox.maxLat));
+    params.set("minLng", String(bbox.minLng));
+    params.set("maxLng", String(bbox.maxLng));
   }
 
-  const params = new URLSearchParams({
-    minLat: String(bbox.minLat),
-    maxLat: String(bbox.maxLat),
-    minLng: String(bbox.minLng),
-    maxLng: String(bbox.maxLng),
-  });
+  if (options?.limit != null) {
+    params.set("limit", String(options.limit));
+  }
 
-  return `${API_BASE}${path}?${params.toString()}`;
+  const query = params.toString();
+
+  return query ? `${API_BASE}${path}?${query}` : `${API_BASE}${path}`;
 }
 
 export type AdminPlacesResponse = {
@@ -33,8 +45,9 @@ export type AdminPlacesResponse = {
 
 export async function fetchAdminPlaces(
   bbox?: BboxQuery,
+  options?: FetchOptions,
 ): Promise<AdminPlacesResponse> {
-  const response = await fetch(buildBboxUrl("/seed", bbox), {
+  const response = await fetch(buildBboxUrl("/seed", bbox, options), {
     headers: {
       Accept: "application/json",
     },
@@ -58,8 +71,11 @@ export async function fetchAdminPlaces(
   };
 }
 
-export async function fetchPosts(bbox?: BboxQuery): Promise<CommunityPost[]> {
-  const response = await fetch(buildBboxUrl("/posts", bbox), {
+export async function fetchPosts(
+  bbox?: BboxQuery,
+  options?: FetchOptions,
+): Promise<CommunityPost[]> {
+  const response = await fetch(buildBboxUrl("/posts", bbox, options), {
     headers: {
       Accept: "application/json",
     },
