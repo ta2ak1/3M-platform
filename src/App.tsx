@@ -33,6 +33,9 @@ function App() {
 
   const selectedAiTags = selectedPost?.aiTags ?? [];
   const selectedHumanTags = selectedPost?.humanTags ?? selectedPost?.tags ?? [];
+  const formLocationLabel = formLocation
+    ? `投稿位置：緯度 ${formLocation.lat.toFixed(5)} / 経度 ${formLocation.lng.toFixed(5)}`
+    : "投稿位置：現在地を確認中...";
 
   const loadPosts = useCallback(async (bbox?: BboxQuery | null) => {
     setIsLoading(true);
@@ -127,12 +130,12 @@ function App() {
                 3M Platform
               </p>
               <h1 className="mt-2 text-2xl font-bold md:text-4xl">
-                地域のいいね！
+                みんなで見つける地域の魅力
               </h1>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-sm text-emerald-50">
               <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
-                行政シード {seedCount.toLocaleString("ja-JP")}件 / 表示中{" "}
+                行政オープンデータ {seedCount.toLocaleString("ja-JP")}件 / 表示中{" "}
                 {visibleSeedCount.toLocaleString("ja-JP")}件
               </span>
               <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
@@ -349,9 +352,7 @@ function App() {
                   </h2>
                 </div>
                 <div className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  {formLocation
-                    ? `${formLocation.lat.toFixed(5)}, ${formLocation.lng.toFixed(5)}`
-                    : "現在地を確認中..."}
+                  {formLocationLabel}
                 </div>
               </div>
 
