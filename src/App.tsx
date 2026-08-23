@@ -3,12 +3,14 @@ import { PostForm } from "./components/PostForm";
 import { PostMap } from "./components/PostMap";
 import { LegalNotice } from "./components/LegalNotice";
 import { InstallPrompt } from "./components/InstallPrompt";
+import { DataUsePanel } from "./components/DataUsePanel";
 import { fetchAdminPlaces, fetchPosts, submitPost } from "./lib/api";
 import type { BboxQuery } from "./lib/api";
 import type { AdminPlace, CommunityPost } from "./types";
 
 const DEFAULT_LOCATION = { lat: 35.681236, lng: 139.767125 };
 type Location = typeof DEFAULT_LOCATION;
+type ViewMode = "collect" | "use";
 
 function isSameBbox(a: BboxQuery | null, b: BboxQuery) {
   if (!a) {
@@ -38,6 +40,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mapBbox, setMapBbox] = useState<BboxQuery | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("collect");
   const mapBboxRef = useRef<BboxQuery | null>(null);
 
   const selectedPost = useMemo(
@@ -174,7 +177,41 @@ function App() {
           </div>
         ) : null}
 
-        <div className="grid min-w-0 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="mb-5 rounded-3xl border border-slate-200 bg-white p-2 shadow-sm shadow-slate-200/60">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setViewMode("collect")}
+              className={`rounded-2xl px-4 py-3 text-left transition ${
+                viewMode === "collect"
+                  ? "bg-primary text-white shadow-sm"
+                  : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <span className="block text-sm font-bold">投稿する</span>
+              <span className="mt-1 block text-xs opacity-80">
+                市民投稿と行政データを地図で集める
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("use")}
+              className={`rounded-2xl px-4 py-3 text-left transition ${
+                viewMode === "use"
+                  ? "bg-primary text-white shadow-sm"
+                  : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <span className="block text-sm font-bold">活用する</span>
+              <span className="mt-1 block text-xs opacity-80">
+                集まったデータを分析・出力する
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {viewMode === "collect" ? (
+          <div className="grid min-w-0 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
           <aside className="min-w-0 flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900">最近の投稿</h2>
@@ -380,7 +417,15 @@ function App() {
               />
             </div>
           </section>
-        </div>
+          </div>
+        ) : (
+          <DataUsePanel
+            posts={posts}
+            adminPlaces={adminPlaces}
+            seedCount={seedCount}
+            visibleSeedCount={visibleSeedCount}
+          />
+        )}
       </main>
       <LegalNotice />
       <InstallPrompt />
