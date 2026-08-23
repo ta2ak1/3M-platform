@@ -6,9 +6,17 @@ import type { AdminPlace, CommunityPost } from "../types";
 interface PostMapProps {
   posts: CommunityPost[];
   adminPlaces?: AdminPlace[];
+  initialCenter?: { lat: number; lng: number };
+  draftLocation?: { lat: number; lng: number };
   selectedPostId?: string | null;
   onSelectPost?: (post: CommunityPost | null) => void;
   onLocationPick?: (location: { lat: number; lng: number }) => void;
+  onBoundsChange?: (bbox: {
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+  }) => void;
 }
 
 async function loadLeaflet(): Promise<typeof Leaflet> {
@@ -17,28 +25,87 @@ async function loadLeaflet(): Promise<typeof Leaflet> {
   return L;
 }
 
+function createCommunityPostIcon(L: typeof Leaflet) {
+  return L.divIcon({
+    className: "community-post-marker",
+    html: '<span class="community-post-marker__head"><span class="community-post-marker__dot"></span></span>',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -18],
+  });
+}
+
+function createDraftLocationIcon(L: typeof Leaflet) {
+  return L.divIcon({
+    className: "draft-location-marker",
+    html: '<span class="draft-location-marker__head"><span class="draft-location-marker__dot"></span></span><span class="draft-location-marker__tip"></span>',
+    iconSize: [30, 40],
+    iconAnchor: [15, 40],
+    popupAnchor: [0, -38],
+  });
+}
+
+function createCurrentLocationIcon(L: typeof Leaflet) {
+  return L.divIcon({
+    className: "current-location-marker",
+    html: '<span class="current-location-marker__pulse"></span><span class="current-location-marker__dot"></span>',
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -18],
+  });
+}
+
 export function PostMap({
   posts,
   adminPlaces = [],
+  initialCenter = { lat: 35.681236, lng: 139.767125 },
+  draftLocation,
   selectedPostId,
   onSelectPost,
   onLocationPick,
+  onBoundsChange,
 }: PostMapProps) {
   const mapRef = useRef<Leaflet.Map | null>(null);
   const markerLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const markerMapRef = useRef<Map<string, Leaflet.Marker>>(new Map());
   const adminMarkerLayerRef = useRef<Leaflet.LayerGroup | null>(null);
+  const currentLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
+  const draftLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const lastMapSizeRef = useRef("");
+  // fitBounds による moveend で再取得ループを防ぐ
+  const suppressMoveendRef = useRef(false);
+  // 初回表示時のみ fitBounds を呼び出す
+  const hasFittedBoundsRef = useRef(false);
+  const hasUserMovedMapRef = useRef(false);
+  const hasAppliedInitialCenterRef = useRef("");
   const [isReady, setIsReady] = useState(false);
 
   // リサイズ監視処理
   useEffect(() => {
+    let resizeFrame: number | null = null;
+
     const resizeObserver = new ResizeObserver((entries) => {
       if (entries.length === 0) {
         return;
       }
 
-      mapRef.current?.invalidateSize();
+      const { width, height } = entries[0].contentRect;
+      const nextSize = `${Math.round(width)}x${Math.round(height)}`;
+      if (lastMapSizeRef.current === nextSize) {
+        return;
+      }
+
+      lastMapSizeRef.current = nextSize;
+
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
+
+      resizeFrame = window.requestAnimationFrame(() => {
+        mapRef.current?.invalidateSize({ pan: false });
+        resizeFrame = null;
+      });
     });
 
     if (mapContainerRef.current) {
@@ -46,6 +113,9 @@ export function PostMap({
     }
 
     return () => {
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
       resizeObserver.disconnect();
     };
   }, []);
@@ -66,7 +136,8 @@ export function PostMap({
 
       const map = L.map(container, {
         zoomControl: true,
-      }).setView([35.681236, 139.767125], 12);
+      }).setView([initialCenter.lat, initialCenter.lng], 14);
+      hasAppliedInitialCenterRef.current = `${initialCenter.lat},${initialCenter.lng}`;
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
@@ -75,6 +146,8 @@ export function PostMap({
 
       markerLayerRef.current = L.layerGroup().addTo(map);
       adminMarkerLayerRef.current = L.layerGroup().addTo(map);
+      currentLocationLayerRef.current = L.layerGroup().addTo(map);
+      draftLocationLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
       setIsReady(true);
 
@@ -82,6 +155,36 @@ export function PostMap({
         const { lat, lng } = event.latlng;
         onLocationPick?.({ lat, lng });
       });
+
+      map.on("dragstart zoomstart", () => {
+        hasUserMovedMapRef.current = true;
+      });
+
+      let boundsTimer: ReturnType<typeof setTimeout> | null = null;
+      const emitBounds = () => {
+        const b = map.getBounds();
+        onBoundsChange?.({
+          minLat: b.getSouth(),
+          maxLat: b.getNorth(),
+          minLng: b.getWest(),
+          maxLng: b.getEast(),
+        });
+      };
+
+      map.on("moveend", () => {
+        // fitBounds によるプログラム的移動はスキップ
+        if (suppressMoveendRef.current) return;
+        if (boundsTimer !== null) {
+          clearTimeout(boundsTimer);
+        }
+        boundsTimer = setTimeout(() => {
+          emitBounds();
+          boundsTimer = null;
+        }, 500);
+      });
+
+      // 初期ビューポートを通知（初回ロード用）
+      emitBounds();
     })();
 
     return () => {
@@ -90,9 +193,79 @@ export function PostMap({
       mapRef.current = null;
       markerLayerRef.current = null;
       adminMarkerLayerRef.current = null;
+      currentLocationLayerRef.current = null;
+      draftLocationLayerRef.current = null;
       markerMapRef.current.clear();
     };
   }, [onLocationPick]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isReady || hasUserMovedMapRef.current) {
+      return;
+    }
+
+    const centerKey = `${initialCenter.lat},${initialCenter.lng}`;
+    if (hasAppliedInitialCenterRef.current === centerKey) {
+      return;
+    }
+
+    hasAppliedInitialCenterRef.current = centerKey;
+    suppressMoveendRef.current = true;
+    map.setView([initialCenter.lat, initialCenter.lng], 14);
+    map.once("moveend", () => {
+      suppressMoveendRef.current = false;
+      const b = map.getBounds();
+      onBoundsChange?.({
+        minLat: b.getSouth(),
+        maxLat: b.getNorth(),
+        minLng: b.getWest(),
+        maxLng: b.getEast(),
+      });
+    });
+  }, [initialCenter.lat, initialCenter.lng, isReady, onBoundsChange]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = currentLocationLayerRef.current;
+    if (!map || !layer || !isReady) {
+      return;
+    }
+
+    const L = (window as any).L as typeof Leaflet;
+    layer.clearLayers();
+    L.marker([initialCenter.lat, initialCenter.lng], {
+      icon: createCurrentLocationIcon(L),
+      interactive: false,
+      keyboard: false,
+    }).addTo(layer);
+  }, [initialCenter.lat, initialCenter.lng, isReady]);
+
+  useEffect(() => {
+    const layer = draftLocationLayerRef.current;
+    if (!layer || !isReady) {
+      return;
+    }
+
+    const L = (window as any).L as typeof Leaflet;
+    layer.clearLayers();
+
+    if (!draftLocation) {
+      return;
+    }
+
+    L.marker([draftLocation.lat, draftLocation.lng], {
+      icon: createDraftLocationIcon(L),
+      interactive: false,
+      keyboard: false,
+    })
+      .bindTooltip("投稿位置", {
+        direction: "top",
+        offset: [0, -32],
+        opacity: 0.92,
+      })
+      .addTo(layer);
+  }, [draftLocation?.lat, draftLocation?.lng, isReady]);
 
   const normalizedPosts = useMemo(
     () =>
@@ -120,9 +293,12 @@ export function PostMap({
 
     const nextMarkers = new Map<string, Leaflet.Marker>();
     layer.clearLayers();
+    const postIcon = createCommunityPostIcon((window as any).L);
 
     normalizedPosts.forEach((post) => {
-      const marker = (window as any).L.marker([post.lat, post.lng]).bindPopup(`
+      const marker = (window as any).L.marker([post.lat, post.lng], {
+        icon: postIcon,
+      }).bindPopup(`
           <div style="min-width:180px; max-width:220px;">
             <strong>${post.title}</strong>
             <div style="margin:8px 0;">${post.summary}</div>
@@ -168,9 +344,20 @@ export function PostMap({
       ),
     ];
 
-    if (allPoints.length > 0) {
+    // 初回のみ自動フィット（以降はユーザー操作に委ねる）
+    if (
+      !hasFittedBoundsRef.current &&
+      !hasUserMovedMapRef.current &&
+      hasAppliedInitialCenterRef.current === "35.681236,139.767125" &&
+      allPoints.length > 0
+    ) {
+      hasFittedBoundsRef.current = true;
+      suppressMoveendRef.current = true;
       const bounds = (window as any).L.latLngBounds(allPoints);
       map.fitBounds(bounds.pad(0.3));
+      map.once("moveend", () => {
+        suppressMoveendRef.current = false;
+      });
     }
   }, [normalizedPosts, normalizedAdminPlaces, isReady, onSelectPost]);
 
@@ -187,5 +374,33 @@ export function PostMap({
     marker.openPopup();
   }, [selectedPostId]);
 
-  return <div ref={mapContainerRef} className={"h-full w-full"} />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={mapContainerRef} className={"h-full w-full"} />
+      <div
+        className="absolute right-3 bottom-3 z-[400] rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg shadow-slate-900/10 backdrop-blur"
+        aria-label="地図の凡例"
+      >
+        <p className="mb-2 font-bold text-slate-900">凡例</p>
+        <ul className="space-y-1.5">
+          <li className="flex items-center gap-2">
+            <span className="legend-marker legend-marker--community" />
+            <span>市民投稿</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="legend-marker legend-marker--admin" />
+            <span>行政データ</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="legend-marker legend-marker--current" />
+            <span>現在地</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="legend-marker legend-marker--draft" />
+            <span>投稿位置</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
 }

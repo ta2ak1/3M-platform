@@ -3,27 +3,79 @@ import { mockPosts } from "./mockData";
 
 const API_BASE = "/api";
 
-export async function fetchAdminPlaces(): Promise<AdminPlace[]> {
-  const response = await fetch(`${API_BASE}/seed`, {
+export type BboxQuery = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+};
+
+type FetchOptions = {
+  limit?: number;
+};
+
+function buildBboxUrl(
+  path: string,
+  bbox?: BboxQuery,
+  options?: FetchOptions,
+): string {
+  const params = new URLSearchParams();
+
+  if (bbox) {
+    params.set("minLat", String(bbox.minLat));
+    params.set("maxLat", String(bbox.maxLat));
+    params.set("minLng", String(bbox.minLng));
+    params.set("maxLng", String(bbox.maxLng));
+  }
+
+  if (options?.limit != null) {
+    params.set("limit", String(options.limit));
+  }
+
+  const query = params.toString();
+
+  return query ? `${API_BASE}${path}?${query}` : `${API_BASE}${path}`;
+}
+
+export type AdminPlacesResponse = {
+  count: number;
+  visibleCount: number;
+  places: AdminPlace[];
+};
+
+export async function fetchAdminPlaces(
+  bbox?: BboxQuery,
+  options?: FetchOptions,
+): Promise<AdminPlacesResponse> {
+  const response = await fetch(buildBboxUrl("/seed", bbox, options), {
     headers: {
       Accept: "application/json",
     },
   });
 
   if (!response.ok) {
-    return [];
+    return { count: 0, visibleCount: 0, places: [] };
   }
 
   const payload = (await response.json()) as {
     places?: AdminPlace[];
     count?: number;
+    visibleCount?: number;
   };
+  const places = payload.places ?? [];
 
-  return payload.places ?? [];
+  return {
+    count: payload.count ?? places.length,
+    visibleCount: payload.visibleCount ?? places.length,
+    places,
+  };
 }
 
-export async function fetchPosts(): Promise<CommunityPost[]> {
-  const response = await fetch(`${API_BASE}/posts`, {
+export async function fetchPosts(
+  bbox?: BboxQuery,
+  options?: FetchOptions,
+): Promise<CommunityPost[]> {
+  const response = await fetch(buildBboxUrl("/posts", bbox, options), {
     headers: {
       Accept: "application/json",
     },
@@ -39,7 +91,11 @@ export async function fetchPosts(): Promise<CommunityPost[]> {
 
 export async function precheckPost(formData: FormData): Promise<{
   ok: boolean;
+  title?: string;
+  summary?: string;
   tags: string[];
+  warnings?: string[];
+  requiresReview?: boolean;
   message?: string;
 }> {
   const response = await fetch(`${API_BASE}/posts/precheck`, {
@@ -49,7 +105,11 @@ export async function precheckPost(formData: FormData): Promise<{
 
   const payload = (await response.json().catch(() => ({}))) as {
     ok?: boolean;
+    title?: string;
+    summary?: string;
     tags?: string[];
+    warnings?: string[];
+    requiresReview?: boolean;
     message?: string;
     reason?: string;
     error?: string;
@@ -66,7 +126,13 @@ export async function precheckPost(formData: FormData): Promise<{
 
   return {
     ok: true,
+    title: typeof payload.title === "string" ? payload.title : undefined,
+    summary: typeof payload.summary === "string" ? payload.summary : undefined,
     tags: Array.isArray(payload.tags) ? payload.tags : [],
+    warnings: Array.isArray(payload.warnings)
+      ? payload.warnings.filter((item): item is string => typeof item === "string")
+      : [],
+    requiresReview: payload.requiresReview === true,
   };
 }
 
@@ -96,6 +162,32 @@ export async function submitPost(formData: FormData): Promise<CommunityPost> {
           "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=900&q=80",
       ),
       createdAt: new Date().toISOString(),
+      capturedAt: String(formData.get("capturedAt") ?? "") || undefined,
+      locationSource: (() => {
+        const src = String(formData.get("locationSource") ?? "");
+        return src === "exif" || src === "device" || src === "manual"
+          ? (src as "exif" | "device" | "manual")
+          : "fallback";
+      })(),
+      contentLicense:
+        formData.get("contentLicense") === "cc-by-4.0"
+          ? "cc-by-4.0"
+          : "all-rights-reserved",
+      tags: (() => {
+        const rawTags = formData.get("tags");
+        if (typeof rawTags !== "string") {
+          return [];
+        }
+
+        try {
+          const parsed = JSON.parse(rawTags) as unknown;
+          return Array.isArray(parsed)
+            ? parsed.filter((tag): tag is string => typeof tag === "string")
+            : [];
+        } catch {
+          return [];
+        }
+      })(),
     };
   }
 

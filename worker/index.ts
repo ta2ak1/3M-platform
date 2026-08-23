@@ -19,6 +19,7 @@ type CloudflareEnv = {
   CLOUDFLARE_API_TOKEN?: string;
   AI_GATEWAY_ACCOUNT_ID?: string;
   AI_GATEWAY_NAME?: string;
+  TURNSTILE_SECRET_KEY?: string;
 };
 
 type AppEnv = {
@@ -33,7 +34,22 @@ type PostRow = {
   lng: number;
   photoUrl: string;
   createdAt: string;
+  capturedAt?: string;
+  locationSource?: string;
+  contentLicense?: string;
   tags?: string;
+  aiTags?: string;
+  humanTags?: string;
+};
+
+type LocationSource = "exif" | "device" | "manual" | "fallback";
+type ContentLicense = "all-rights-reserved" | "cc-by-4.0";
+
+type TurnstileSiteverifyResponse = {
+  success?: boolean;
+  action?: string;
+  hostname?: string;
+  "error-codes"?: string[];
 };
 
 type GeoJsonSeedFeature = {
@@ -121,18 +137,55 @@ function getStoredPosts(): CommunityPost[] {
   return [...(inMemoryStore.__community_posts__ ?? [])];
 }
 
+type BboxParams = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+};
+
+function parseBboxParams(q: Record<string, string | undefined>) {
+  const minLat = parseFloat(q.minLat ?? "");
+  const maxLat = parseFloat(q.maxLat ?? "");
+  const minLng = parseFloat(q.minLng ?? "");
+  const maxLng = parseFloat(q.maxLng ?? "");
+
+  return Number.isFinite(minLat) &&
+    Number.isFinite(maxLat) &&
+    Number.isFinite(minLng) &&
+    Number.isFinite(maxLng) &&
+    minLat < maxLat &&
+    minLng < maxLng
+    ? { minLat, maxLat, minLng, maxLng }
+    : undefined;
+}
+
 async function readPostsFromD1(
   db: D1Database | undefined,
+  bbox?: BboxParams,
+  limit = 100,
 ): Promise<CommunityPost[]> {
   if (!db) {
     return [];
   }
 
-  const results = await db
-    .prepare(
-      "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, tags FROM community_posts ORDER BY created_at DESC LIMIT 50",
-    )
-    .all<PostRow>();
+  const safeLimit = Math.min(Math.max(1, limit), 1000);
+
+  const SELECT =
+    "SELECT id, title, summary, lat, lng, photo_url AS photoUrl, created_at AS createdAt, captured_at AS capturedAt, location_source AS locationSource, content_license AS contentLicense, tags, ai_tags AS aiTags, human_tags AS humanTags FROM community_posts";
+
+  const results =
+    bbox != null
+      ? await db
+          .prepare(
+            `${SELECT} WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ? ORDER BY created_at DESC LIMIT ?`,
+          )
+          .bind(bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng, safeLimit)
+          .all<PostRow>()
+      : await db
+          .prepare(`${SELECT} ORDER BY created_at DESC LIMIT ?`)
+          .bind(safeLimit)
+          .all<PostRow>();
 
   return (results.results ?? []).map((row) => ({
     id: row.id,
@@ -142,8 +195,80 @@ async function readPostsFromD1(
     lng: Number(row.lng),
     photoUrl: row.photoUrl,
     createdAt: row.createdAt,
-    tags: safeParseTags(row.tags),
+    capturedAt: row.capturedAt,
+    locationSource: parseLocationSource(row.locationSource),
+    contentLicense: parseContentLicense(row.contentLicense),
+    tags: safeParseTags(row.humanTags ?? row.tags),
+    aiTags: safeParseTags(row.aiTags),
+    humanTags: safeParseTags(row.humanTags ?? row.tags),
   }));
+}
+
+function parseLocationSource(value: unknown): LocationSource {
+  return value === "exif" ||
+    value === "device" ||
+    value === "manual" ||
+    value === "fallback"
+    ? value
+    : "fallback";
+}
+
+function parseContentLicense(value: unknown): ContentLicense {
+  return value === "cc-by-4.0" ? "cc-by-4.0" : "all-rights-reserved";
+}
+
+async function verifyTurnstile(
+  env: CloudflareEnv,
+  token: unknown,
+  remoteIp: string | undefined,
+): Promise<boolean> {
+  if (!env.TURNSTILE_SECRET_KEY) {
+    return true;
+  }
+
+  if (typeof token !== "string" || token.length === 0 || token.length > 2048) {
+    return false;
+  }
+
+  const formData = new FormData();
+  formData.set("secret", env.TURNSTILE_SECRET_KEY);
+  formData.set("response", token);
+  formData.set("idempotency_key", crypto.randomUUID());
+  if (remoteIp) {
+    formData.set("remoteip", remoteIp);
+  }
+
+  try {
+    const response = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      {
+        method: "POST",
+        body: formData,
+      },
+    );
+    const result = (await response.json()) as TurnstileSiteverifyResponse;
+
+    if (!response.ok || !result.success) {
+      return false;
+    }
+
+    return !result.action || result.action === "community_post";
+  } catch {
+    return false;
+  }
+}
+
+function normalizeCapturedAt(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date.toISOString();
 }
 
 function safeParseTags(value?: string): string[] {
@@ -168,7 +293,7 @@ async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
 
   await db
     .prepare(
-      "INSERT INTO community_posts (id, title, summary, lat, lng, photo_url, created_at, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO community_posts (id, title, summary, lat, lng, photo_url, created_at, captured_at, location_source, content_license, tags, ai_tags, human_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       post.id,
@@ -178,7 +303,12 @@ async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
       post.lng,
       post.photoUrl,
       post.createdAt,
+      post.capturedAt ?? null,
+      post.locationSource ?? "fallback",
+      post.contentLicense ?? "all-rights-reserved",
       JSON.stringify(post.tags ?? []),
+      JSON.stringify(post.aiTags ?? []),
+      JSON.stringify(post.humanTags ?? post.tags ?? []),
     )
     .run();
 }
@@ -221,14 +351,42 @@ async function ensureSeedData(db: D1Database | undefined) {
 
 async function readSeedPlacesFromD1(
   db: D1Database | undefined,
-): Promise<AdminPlace[]> {
+  bbox?: BboxParams,
+  limit = 500,
+): Promise<{ count: number; places: AdminPlace[] }> {
+  const safeLimit = Math.min(Math.max(1, limit), 10000);
+
   if (!db) {
-    return seedPlaces;
+    const filteredPlaces = bbox
+      ? seedPlaces.filter(
+          (place) =>
+            place.lat >= bbox.minLat &&
+            place.lat <= bbox.maxLat &&
+            place.lng >= bbox.minLng &&
+            place.lng <= bbox.maxLng,
+        )
+      : seedPlaces;
+
+    return {
+      count: seedPlaces.length,
+      places: filteredPlaces.slice(0, safeLimit),
+    };
   }
+
+  const count = await db
+    .prepare("SELECT COUNT(*) AS count FROM admin_places")
+    .first<{ count: number }>();
 
   const results = await db
     .prepare(
-      "SELECT id, name, category, city, prefecture, lat, lng FROM admin_places ORDER BY name ASC LIMIT 200",
+      bbox
+        ? "SELECT id, name, category, city, prefecture, lat, lng FROM admin_places WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ? ORDER BY name ASC LIMIT ?"
+        : "SELECT id, name, category, city, prefecture, lat, lng FROM admin_places ORDER BY name ASC LIMIT ?",
+    )
+    .bind(
+      ...(bbox
+        ? [bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng, safeLimit]
+        : [safeLimit]),
     )
     .all<{
       id: string;
@@ -241,7 +399,9 @@ async function readSeedPlacesFromD1(
     }>();
 
   if ((results.results ?? []).length > 0) {
-    return (results.results ?? []).map((row) => ({
+    return {
+      count: count?.count ?? 0,
+      places: (results.results ?? []).map((row) => ({
       id: row.id,
       name: row.name,
       category: row.category,
@@ -249,10 +409,14 @@ async function readSeedPlacesFromD1(
       prefecture: row.prefecture,
       lat: Number(row.lat),
       lng: Number(row.lng),
-    }));
+      })),
+    };
   }
 
-  return seedPlaces;
+  return {
+    count: count?.count ?? 0,
+    places: [],
+  };
 }
 
 function buildFallbackUrl(fileName: string, fallback: string) {
@@ -385,6 +549,15 @@ function sanitizeTags(tags: string[]): string[] {
     .filter((tag) => allowed.has(tag) || tag.length >= 2);
 }
 
+function sanitizeDraftText(value: unknown, fallback: string, maxLength: number) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const text = value.trim().replace(/\s+/g, " ");
+  return text ? text.slice(0, maxLength) : fallback;
+}
+
 function arrayBufferToBase64DataUrl(
   buffer: ArrayBuffer,
   mimeType = "image/jpeg",
@@ -471,6 +644,20 @@ async function resizeImageForAi(
 
 let visionModelAgreementAccepted = false;
 
+function resolveGatewayName(env: CloudflareEnv): string | undefined {
+  const rawName = env.AI_GATEWAY_NAME?.trim();
+  if (!rawName) {
+    return undefined;
+  }
+
+  // Treat template placeholders as unset to avoid breaking production calls.
+  if (rawName.toUpperCase().startsWith("YOUR_")) {
+    return undefined;
+  }
+
+  return rawName;
+}
+
 async function ensureVisionModelAccepted(env: CloudflareEnv): Promise<void> {
   if (visionModelAgreementAccepted) {
     return;
@@ -480,7 +667,7 @@ async function ensureVisionModelAccepted(env: CloudflareEnv): Promise<void> {
     throw new Error("AI binding is not configured");
   }
 
-  const gatewayName = env.AI_GATEWAY_NAME?.trim();
+  const gatewayName = resolveGatewayName(env);
   const payload = {
     prompt: "agree",
   };
@@ -517,7 +704,7 @@ async function runVisionModel(
     throw new Error("AI binding is not configured");
   }
 
-  const gatewayName = env.AI_GATEWAY_NAME?.trim();
+  const gatewayName = resolveGatewayName(env);
 
   if (gatewayName) {
     return await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", payload, {
@@ -558,7 +745,14 @@ async function runModerationCheck(
   imageBuffer: ArrayBuffer,
   title: string,
   comment: string,
-): Promise<{ safe: boolean; reason?: string }> {
+): Promise<{
+  safe: boolean;
+  requiresReview?: boolean;
+  reason?: string;
+  detected?: string[];
+  possibleMisses?: string[];
+  serviceError?: boolean;
+}> {
   try {
     const constrainedImage = await resizeImageForAi(imageBuffer, 1200, 0.7);
     const imageDataUrl = arrayBufferToBase64DataUrl(
@@ -573,18 +767,50 @@ async function runModerationCheck(
         {
           role: "system",
           content:
-            "あなたは投稿画像の安全性を判定する審査員です。安全な画像は safe=true、危険な画像は safe=false で返してください。",
+            "あなたは公開用オープンデータ画像の安全性を判定する審査員です。公開不可、要確認、公開可を区別して JSON だけで返してください。",
         },
         {
           role: "user",
           content: `
-            次の画像とコメントを確認し、公開投稿に適さない場合は safe=false としてください。
-            ルール:
-            - 性的、暴力的、差別的、露骨な表現は unsafe
-            - 風景や食事、自然景観、街並みのような通常の投稿は safe
-            - コメントと写真の関係が不自然なら注意
+            次の画像を公開用オープンデータ画像として確認してください。
+            目的は「個人・組織・店舗・商品・場所が特定できる可能性」を人が確認できるようにすることです。
+
+            明確に公開不可なものは safe=false:
+            - 性的、暴力的、差別的、露骨な表現
+            - 危険行為、嫌がらせ、犯罪を助長する内容
+
+            次の情報が少しでも視認または推測できる場合は safe=true かつ requiresReview=true:
+            - 顔
+            - 人物
+            - 名札
+            - 社名
+            - 店舗名
+            - 商品名
+            - ブランドロゴ
+            - QRコード
+            - バーコード
+            - ナンバープレート
+            - 電話番号
+            - メールアドレス
+            - 地名
+            - 建物名
+            - PC画面
+            - ホワイトボード記載内容
+
+            顔や人物は、小さい、遠い、横顔、後ろ姿、ぼやけている、一部だけ写っている場合でも requiresReview=true。
+            画像内に人間らしい輪郭、頭部、手足、服装、肌色領域が見える場合は requiresReview=true。
+            特定できるか判断に迷う場合も requiresReview=true。
+
+            特定につながる情報が見当たらず、通常の風景・自然・公園・空・植物・一般的な街並みであれば safe=true かつ requiresReview=false。
+
             出力は必ず JSON で以下の形式にしてください:
-            { "safe": true|false, "reason": "短い理由" }
+            {
+              "safe": true|false,
+              "requiresReview": true|false,
+              "reason": "短い理由",
+              "detected": ["検出した項目"],
+              "possibleMisses": ["見落としの可能性がある箇所"]
+            }
 
             タイトル: ${title}
             コメント: ${comment}
@@ -601,10 +827,30 @@ async function runModerationCheck(
       (typeof safeValue === "string" && safeValue.toLowerCase() === "true");
 
     const reason = extractReasonFromParsedResult(parsed);
+    const requiresReviewValue = parsed.requiresReview ?? parsed.requires_review;
+    const requiresReview =
+      requiresReviewValue === true ||
+      (typeof requiresReviewValue === "string" &&
+        requiresReviewValue.toLowerCase() === "true");
+    const detected = Array.isArray(parsed.detected)
+      ? parsed.detected.filter((item): item is string => typeof item === "string")
+      : [];
+    const possibleMisses = Array.isArray(parsed.possibleMisses)
+      ? parsed.possibleMisses.filter(
+          (item): item is string => typeof item === "string",
+        )
+      : Array.isArray(parsed.possible_misses)
+        ? parsed.possible_misses.filter(
+            (item): item is string => typeof item === "string",
+          )
+        : [];
 
     return {
       safe,
+      requiresReview,
       reason,
+      detected,
+      possibleMisses,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -612,6 +858,7 @@ async function runModerationCheck(
     if (message.includes("image_too_large_for_ai")) {
       return {
         safe: false,
+        requiresReview: false,
         reason:
           "画像サイズが大きすぎます。もう少し小さな写真で再度お試しください。",
       };
@@ -623,15 +870,18 @@ async function runModerationCheck(
     ) {
       return {
         safe: false,
+        requiresReview: false,
         reason:
           "画像が大きすぎるため、AI 判定ができませんでした。画像をもう少し小さくして再度お試しください。",
       };
     }
 
     return {
-      safe: false,
-      reason:
-        "AI 判定サービスが応答できませんでした。画像を別のものにして再度お試しください。",
+      // Fail-open on transient AI service failures; user performs final human review.
+      safe: true,
+      requiresReview: true,
+      serviceError: true,
+      reason: `AI 判定サービスが応答できませんでした（${message}）。画像を別のものにして再度お試しください。`,
     };
   }
 }
@@ -690,6 +940,107 @@ async function runTagSuggestion(
   }
 }
 
+async function runPhotoDraftSuggestion(
+  env: CloudflareEnv,
+  imageBuffer: ArrayBuffer,
+): Promise<{ title: string; summary: string; tags: string[] }> {
+  try {
+    const constrainedImage = await resizeImageForAi(imageBuffer, 1200, 0.7);
+    const imageDataUrl = arrayBufferToBase64DataUrl(
+      constrainedImage,
+      "image/jpeg",
+    );
+
+    await ensureVisionModelAccepted(env);
+
+    const response = await runVisionModel(env, {
+      messages: [
+        {
+          role: "system",
+          content:
+            "あなたは地域の魅力投稿の下書きを作る編集者です。写真から、自然な日本語の短い投稿案を作ってください。",
+        },
+        {
+          role: "user",
+          content: `
+            この写真をもとに、投稿タイトル、一言コメント、タグ候補を作成してください。
+            誇張しすぎず、写真から読み取れる範囲で具体的にしてください。
+            出力は必ず JSON で以下の形式にしてください:
+            { "title": "短いタイトル", "summary": "一言コメント", "tags": ["公園", "散歩", "自然"] }
+          `,
+        },
+      ],
+      image: imageDataUrl,
+    });
+
+    const parsed = normalizeJsonResponse(response);
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags.filter((tag): tag is string => typeof tag === "string")
+      : [];
+
+    return {
+      title: sanitizeDraftText(parsed.title, "地域の魅力スポット", 60),
+      summary: sanitizeDraftText(
+        parsed.summary ?? parsed.comment,
+        "写真から見つけた地域のおすすめスポットです。",
+        200,
+      ),
+      tags: sanitizeTags(tags),
+    };
+  } catch {
+    return {
+      title: "地域の魅力スポット",
+      summary: "写真から見つけた地域のおすすめスポットです。",
+      tags: [],
+    };
+  }
+}
+
+async function runTextTagSuggestion(
+  env: CloudflareEnv,
+  title: string,
+  comment: string,
+): Promise<string[]> {
+  try {
+    await ensureVisionModelAccepted(env);
+
+    const response = await runVisionModel(env, {
+      messages: [
+        {
+          role: "system",
+          content:
+            "あなたは地域の魅力投稿向けに、文章から適切な日本語タグ候補を作成するアシスタントです。",
+        },
+        {
+          role: "user",
+          content: `
+            次の投稿文からタグ候補を3〜6個作成してください。
+            出力は必ず JSON で以下の形式にしてください:
+            { "tags": ["公園", "散歩", "自然"] }
+
+            タイトル: ${title}
+            コメント: ${comment}
+          `,
+        },
+      ],
+    });
+
+    const parsed = normalizeJsonResponse(response);
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags.filter((tag): tag is string => typeof tag === "string")
+      : typeof parsed.tags === "string"
+        ? parsed.tags
+            .split(/[\s,、,]+/)
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+        : [];
+
+    return sanitizeTags(tags);
+  } catch {
+    return sanitizeTags([title, ...comment.split(/[\s,、。]+/)]).slice(0, 6);
+  }
+}
+
 const app = new Hono<AppEnv>();
 
 app.get("/uploads/*", async (c) => {
@@ -715,17 +1066,33 @@ app.get("/api/health", (c) => {
 
 app.get("/api/seed", async (c) => {
   await ensureSeedData(c.env.DB);
-  const places = await readSeedPlacesFromD1(c.env.DB);
+  const q = c.req.query();
+  const bbox = parseBboxParams(q);
+  const limit = parseInt(q.limit ?? "500", 10);
+  const result = await readSeedPlacesFromD1(
+    c.env.DB,
+    bbox,
+    Number.isFinite(limit) ? limit : 500,
+  );
 
   return c.json({
-    count: places.length,
-    places,
+    count: result.count,
+    visibleCount: result.places.length,
+    places: result.places,
   });
 });
 
 app.get("/api/posts", async (c) => {
-  const dbPosts = await readPostsFromD1(c.env.DB);
-  if (dbPosts.length > 0) {
+  const q = c.req.query();
+  const limit = parseInt(q.limit ?? "100", 10);
+  const bbox = parseBboxParams(q);
+
+  const dbPosts = await readPostsFromD1(
+    c.env.DB,
+    bbox,
+    Number.isFinite(limit) ? limit : 100,
+  );
+  if (c.env.DB) {
     return c.json({ posts: dbPosts });
   }
 
@@ -734,9 +1101,34 @@ app.get("/api/posts", async (c) => {
 
 app.post("/api/posts/precheck", async (c) => {
   const formData = await c.req.formData();
+  const mode = String(formData.get("mode") ?? "photo");
   const photo = formData.get("photo");
   const title = String(formData.get("title") ?? "").trim();
   const comment = String(formData.get("comment") ?? "").trim();
+
+  if (mode === "text") {
+    if (!title || !comment) {
+      return c.json(
+        {
+          ok: false,
+          error: "missing_text",
+          message: "写真なし投稿ではタイトルと一言を入力してください。",
+        },
+        400,
+      );
+    }
+
+    const tags = await runTextTagSuggestion(c.env, title, comment);
+    return c.json({
+      ok: true,
+      safe: true,
+      title,
+      summary: comment,
+      tags,
+      warnings: [],
+      requiresReview: false,
+    });
+  }
 
   if (!(photo instanceof File)) {
     return c.json(
@@ -750,11 +1142,12 @@ app.post("/api/posts/precheck", async (c) => {
   }
 
   const imageBuffer = await photo.arrayBuffer();
+  const draft = await runPhotoDraftSuggestion(c.env, imageBuffer);
   const moderation = await runModerationCheck(
     c.env,
     imageBuffer,
-    title,
-    comment,
+    title || draft.title,
+    comment || draft.summary,
   );
 
   if (!moderation.safe) {
@@ -773,14 +1166,45 @@ app.post("/api/posts/precheck", async (c) => {
     );
   }
 
-  const tags = await runTagSuggestion(c.env, imageBuffer, title, comment);
+  const tags =
+    draft.tags.length > 0
+      ? draft.tags
+      : await runTagSuggestion(
+          c.env,
+          imageBuffer,
+          title || draft.title,
+          comment || draft.summary,
+        );
+  const warnings = [
+    ...(moderation.requiresReview
+      ? [
+          moderation.reason ??
+            "画像に公開前確認が必要な情報が含まれる可能性があります。",
+        ]
+      : []),
+    ...(moderation.detected && moderation.detected.length > 0
+      ? [`検出候補: ${moderation.detected.join("、")}`]
+      : []),
+    ...(moderation.possibleMisses && moderation.possibleMisses.length > 0
+      ? [`見落とし注意: ${moderation.possibleMisses.join("、")}`]
+      : []),
+    ...(moderation.serviceError
+      ? [
+          moderation.reason ??
+            "AI 判定サービスが一時的に不安定です。内容を確認して投稿してください。",
+        ]
+      : []),
+  ];
 
   return c.json({
     ok: true,
     safe: true,
+    title: title || draft.title,
+    summary: comment || draft.summary,
     tags,
-    warnings: [],
-    requiresReview: false,
+    warnings,
+    requiresReview:
+      moderation.requiresReview === true || moderation.serviceError === true,
   });
 });
 
@@ -792,10 +1216,29 @@ app.post("/api/posts", async (c) => {
   const lng = Number(body.lng ?? 139.767125);
   const photoUrlFromBody = body.photoUrl ? String(body.photoUrl) : "";
   const file = body.photo instanceof File ? body.photo : null;
+  const turnstileToken = body["cf-turnstile-response"];
+
+  const isVerified = await verifyTurnstile(
+    c.env,
+    turnstileToken,
+    c.req.header("CF-Connecting-IP") ?? undefined,
+  );
+  if (!isVerified) {
+    return c.json(
+      {
+        ok: false,
+        error: "turnstile_failed",
+        message: "セキュリティ確認に失敗しました。再度お試しください。",
+      },
+      403,
+    );
+  }
 
   let photoUrl =
     photoUrlFromBody ||
-    "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=1200&q=80";
+    (file
+      ? "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=1200&q=80"
+      : "/favicon.svg");
 
   if (file) {
     const extension = file.name.includes(".")
@@ -820,21 +1263,31 @@ app.post("/api/posts", async (c) => {
     }
   }
 
-  const rawTags = body.tags;
-  const tags = Array.isArray(rawTags)
-    ? rawTags.filter((tag): tag is string => typeof tag === "string")
-    : typeof rawTags === "string"
-      ? (() => {
-          try {
-            const parsed = JSON.parse(rawTags) as unknown;
-            return Array.isArray(parsed)
-              ? parsed.filter((tag): tag is string => typeof tag === "string")
-              : [];
-          } catch {
-            return [];
-          }
-        })()
-      : [];
+  const parseTagField = (value: unknown): string[] => {
+    if (Array.isArray(value)) {
+      return value.filter((tag): tag is string => typeof tag === "string");
+    }
+
+    if (typeof value !== "string") {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return Array.isArray(parsed)
+        ? parsed.filter((tag): tag is string => typeof tag === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const aiTags = parseTagField(body.aiTags ?? body.tags);
+  const humanTags = parseTagField(body.humanTags ?? body.tags);
+  const tags = humanTags;
+  const capturedAt = normalizeCapturedAt(body.capturedAt);
+  const locationSource = parseLocationSource(body.locationSource);
+  const contentLicense = parseContentLicense(body.contentLicense);
 
   const createdAt = new Date().toISOString();
   const post: CommunityPost = {
@@ -845,7 +1298,12 @@ app.post("/api/posts", async (c) => {
     lng,
     photoUrl,
     createdAt,
+    capturedAt,
+    locationSource,
+    contentLicense,
     tags,
+    aiTags,
+    humanTags,
   };
 
   const existing = getStoredPosts();

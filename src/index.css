@@ -33,6 +33,144 @@ body {
   height: 100%;
 }
 
+.community-post-marker {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.community-post-marker__head {
+  align-items: center;
+  background: #f97316;
+  border: 3px solid #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 7px 16px rgb(15 23 42 / 0.28);
+  display: flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.community-post-marker__dot {
+  background: #ffffff;
+  border-radius: 9999px;
+  display: block;
+  height: 8px;
+  opacity: 0.95;
+  width: 8px;
+}
+
+.draft-location-marker {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.draft-location-marker__head {
+  align-items: center;
+  background: #7c3aed;
+  border: 3px solid #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 7px 16px rgb(76 29 149 / 0.32);
+  display: flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.draft-location-marker__dot {
+  background: #ffffff;
+  border-radius: 9999px;
+  display: block;
+  height: 8px;
+  opacity: 0.95;
+  width: 8px;
+}
+
+.draft-location-marker__tip {
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 10px solid #7c3aed;
+  display: block;
+  filter: drop-shadow(0 4px 4px rgb(15 23 42 / 0.18));
+  height: 0;
+  margin-top: -3px;
+  width: 0;
+}
+
+.current-location-marker {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.current-location-marker__pulse {
+  background: rgb(37 99 235 / 0.18);
+  border: 1px solid rgb(37 99 235 / 0.35);
+  border-radius: 9999px;
+  height: 34px;
+  position: absolute;
+  width: 34px;
+}
+
+.current-location-marker__dot {
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 4px 14px rgb(37 99 235 / 0.45);
+  display: block;
+  height: 16px;
+  position: relative;
+  width: 16px;
+}
+
+.legend-marker {
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgb(15 23 42 / 0.2);
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 14px;
+  position: relative;
+  width: 14px;
+}
+
+.legend-marker--community {
+  background: #f97316;
+  border-radius: 9999px;
+}
+
+.legend-marker--community::after {
+  background: #ffffff;
+  border-radius: 9999px;
+  content: "";
+  height: 4px;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+}
+
+.legend-marker--admin {
+  background: #2dd4bf;
+  border-color: #0f766e;
+  border-radius: 9999px;
+}
+
+.legend-marker--current {
+  background: #2563eb;
+  border-radius: 9999px;
+}
+
+.legend-marker--draft {
+  background: #7c3aed;
+  border-radius: 9999px 9999px 9999px 0;
+  transform: rotate(-45deg);
+}
+
 img {
   max-width: 100%;
   display: block;

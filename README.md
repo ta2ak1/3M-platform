@@ -43,7 +43,14 @@
 │   └── geojson.d.ts
 ├── migrations/
 │   ├── 0001_create_community_posts.sql
-│   └── 0002_create_admin_places.sql
+│   ├── 0002_create_admin_places.sql
+│   ├── 0003_add_tags_to_community_posts.sql
+│   ├── 0004_add_ai_and_human_tags_to_community_posts.sql
+│   └── 0005_add_capture_and_location_source_to_community_posts.sql
+├── openspec/
+│   ├── config.yaml
+│   ├── changes/
+│   └── specs/
 ├── package.json
 ├── vite.config.ts
 ├── wrangler.jsonc
@@ -86,6 +93,47 @@ npx wrangler r2 bucket create 3m-platform-photos
 
 `wrangler.jsonc` では公開に必要な設定だけを管理し、実際の機密情報は Cloudflare 側の環境変数や Secrets Store で保持してください。
 
+### Cloudflare Turnstile
+
+市民投稿の最終送信時に Cloudflare Turnstile を使って bot 投稿を抑止します。
+
+- フロントエンドには公開用の `VITE_TURNSTILE_SITE_KEY` を設定します。
+- Worker には秘密鍵 `TURNSTILE_SECRET_KEY` を Secret として設定します。
+- `TURNSTILE_SECRET_KEY` が設定された環境では、Turnstile 検証に失敗した投稿を保存しません。
+
+ローカル検証では Cloudflare のテストキーを使えます。
+
+```bash
+VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+```
+
+本番の秘密鍵はリポジトリに含めず、Cloudflare に登録してください。
+
+```bash
+npx wrangler secret put TURNSTILE_SECRET_KEY
+```
+
+### Cloudflare Secrets への移行手順
+
+1. 秘密にしたい値を洗い出します。
+   - 例: `CLOUDFLARE_API_TOKEN`
+   - 例: 外部連携用トークン、今後追加する API キー
+2. Cloudflare に登録します。
+
+```bash
+npx wrangler secret put CLOUDFLARE_API_TOKEN
+```
+
+3. ローカル専用の値は `.dev.vars` または `.env` に置き、Git には含めません。
+4. 共有してよい値だけを `wrangler.jsonc` の `vars` に残します。
+
+### このアプリでの扱い
+
+- `CLOUDFLARE_API_TOKEN` は Secrets Store に置く
+- `BUCKET_PUBLIC_URL` は公開 URL なので `vars` のままでよい
+- `CLOUDFLARE_ACCOUNT_ID` や `AI_GATEWAY_*` は機密情報ではないが、公開したくない場合はリポジトリから外し、Cloudflare 側で管理する
+
 ## ローカル開発
 
 ```bash
@@ -100,6 +148,16 @@ npm run dev
 npm run build
 ```
 
+## OpenSpec
+
+このリポジトリには OpenSpec を導入済みです。仕様先行で大きめの変更を進めたい場合は、GitHub Copilot の slash command から開始できます。
+
+- 変更提案の開始: `/opsx:propose "変更内容"`
+- 既存仕様や change の探索: `/opsx:explore`
+- 実装後の仕様同期: `/opsx:sync`
+
+初回反映後は IDE の再起動が必要です。OpenSpec のプロジェクト設定は `openspec/config.yaml` にあります。
+
 ## デプロイ
 
 ```bash
@@ -110,11 +168,46 @@ npm run deploy
 
 ## データセットについて
 
-初期管理データは `src/assets/seed.geojson` を利用しています。
+初期管理データ `src/assets/seed.geojson` は、東京都都市整備局の「緑のオープンデータ（GISデータ）」を加工して作成しています。
+
+- 出典：[東京都都市整備局「緑のオープンデータ（GISデータ）」](https://catalog.data.metro.tokyo.lg.jp/dataset/t000008d2000000024)
+- ライセンス：[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)
+- 利用日：2026年8月22日
+- 加工主体：3M Platform contributors
+- 本サービスによる加工であり、東京都が作成・推奨するものではありません。
+
+元データの「利用に当たっての注意事項」を確認のうえ、データの更新・再利用時は元データの利用条件に従ってください。
 
 - Worker 起動時にこの GeoJSON を読み込む
 - `admin_places` テーブルへ初期データを投入
 - 地図上に管理データとユーザー投稿を重ねて表示
+
+## 投稿フロー
+
+市民投稿は軽量なヒューマンインザループで運用します。
+
+1. 投稿者がタイトル、一言、写真を入力して AI 判定を実行する
+2. AI が画像安全性とタグ候補を返す
+3. 投稿者が候補タグを編集し、最終タグを確定する
+4. 投稿者が内容を確認してから公開する
+
+このアプリでは、AI のタグ候補をそのまま自動保存せず、投稿者が最終判断する前提にしています。
+
+## タグ保存モデル
+
+`community_posts` テーブルではタグを 3 つの列で管理します。
+
+- `ai_tags`: AI が提案したタグ候補
+- `human_tags`: 投稿者が最終的に確定したタグ
+- `tags`: 後方互換のための最終タグ（`human_tags` と同じ値）
+
+これにより、AI 提案と人の最終判断を分けて追跡できます。
+
+## AI 判定の可用性設計
+
+AI サービスが一時的に 5xx エラーを返した場合は投稿を即ブロックせず、
+`requiresReview: true` と `warnings` を返して人による最終確認フローを継続します。
+安全性判定そのものが明確に unsafe の場合のみ投稿を停止します。
 
 ## 主要 API
 
@@ -132,4 +225,7 @@ npm run deploy
 
 ## ライセンス
 
-このプロジェクトは個人開発／社内利用を前提としており、特にライセンス表記が必要な場合は別途整理してください。
+- アプリケーションのソースコードは [MIT License](./LICENSE) です。ただし、行政オープンデータ、市民投稿、ロゴ等には適用されません。
+- 行政オープンデータは「データセットについて」に記載したCC BY 4.0の条件に従います。
+- 市民投稿は投稿者に著作権が帰属します。投稿者はサービス運営、表示、保存、不正対策および改善に必要な範囲で、運営者へ非独占的・無償の利用を許諾します。
+- 市民投稿をCC BY 4.0で公開する場合は、投稿者が必要な権利を有することを確認したうえで、明示的なオプトインを取得します。
