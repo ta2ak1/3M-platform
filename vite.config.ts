@@ -14,7 +14,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.png", "pwa-192.png", "pwa-512.png"],
+      includeAssets: ["favicon.svg"],
       manifest: {
         name: "3M Platform",
         short_name: "3M",
@@ -29,28 +29,10 @@ export default defineConfig({
         categories: ["maps", "productivity", "utilities"],
         icons: [
           {
-            src: "/pwa-192.png",
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "any",
-          },
-          {
-            src: "/pwa-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "any",
-          },
-          {
-            src: "/pwa-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable",
-          },
-          {
-            src: "/favicon.png",
-            sizes: "1000x1000",
-            type: "image/png",
-            purpose: "any",
+            src: "/favicon.svg",
+            sizes: "any",
+            type: "image/svg+xml",
+            purpose: "any maskable",
           },
         ],
       },
