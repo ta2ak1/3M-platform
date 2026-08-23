@@ -144,6 +144,7 @@ export function PostForm({
     "editing",
   );
   const [errorMessage, setErrorMessage] = useState("");
+  const [isAiRejected, setIsAiRejected] = useState(false);
   const [reviewMessage, setReviewMessage] = useState("");
   const [reviewWarnings, setReviewWarnings] = useState<string[]>([]);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
@@ -176,6 +177,7 @@ export function PostForm({
     setReviewMessage("");
     setReviewWarnings([]);
     setSuggestedTags([]);
+    setIsAiRejected(false);
     if (nextMessage) {
       setErrorMessage(nextMessage);
     }
@@ -196,6 +198,7 @@ export function PostForm({
     setReviewMessage("");
     setReviewWarnings([]);
     setSuggestedTags([]);
+    setIsAiRejected(false);
     setSelectedTags([]);
     setTurnstileToken("");
     if (nextMessage) {
@@ -231,6 +234,7 @@ export function PostForm({
     setReviewStep("editing");
     setReviewMessage("");
     setErrorMessage("");
+    setIsAiRejected(false);
     clearFileInput();
   };
 
@@ -269,6 +273,7 @@ export function PostForm({
         setSelectedTags([]);
         setReviewStep("editing");
         setReviewMessage("");
+        setIsAiRejected(postMode === "photo");
         setErrorMessage(
           precheckResult.message ??
             "この画像は投稿対象として適さない可能性があります。",
@@ -295,6 +300,7 @@ export function PostForm({
           ? "写真から作った下書きです。内容を確認して編集できます。"
           : "文章からタグ候補を作りました。内容を確認して投稿できます。",
       );
+      setIsAiRejected(false);
       setReviewStep("reviewing");
     } finally {
       setIsChecking(false);
@@ -473,6 +479,7 @@ export function PostForm({
           onChange={async (event) => {
             const file = event.target.files?.[0] ?? null;
             setPhotoFile(file);
+            setIsAiRejected(false);
             if (reviewStep === "reviewing") {
               resetReviewState(
                 "写真を変更したので、AI確認をやり直してください。",
@@ -652,9 +659,26 @@ export function PostForm({
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {errorMessage}
-        </div>
+        isAiRejected ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-base">
+                !
+              </span>
+              <div className="space-y-2">
+                <p className="font-bold">この画像は投稿できませんでした</p>
+                <p className="leading-6">{errorMessage}</p>
+                <p className="text-xs leading-5 text-rose-700">
+                  個人や場所などを特定できる可能性があるため、公開用データとしては使わない判断にしました。別の写真でやり直す場合は、いったんフォームをリセットしてください。
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )
       ) : null}
 
       {reviewStep === "reviewing" ? (
@@ -737,30 +761,32 @@ export function PostForm({
         />
       ) : null}
 
-      <button
-        type="submit"
-        disabled={
-          isSubmitting ||
-          isChecking ||
-          isLocating ||
-          (reviewStep === "reviewing" && turnstileEnabled && !turnstileToken)
-        }
-        className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isChecking
-          ? postMode === "photo"
-            ? "AI下書き中..."
-            : "タグ提案中..."
-          : isSubmitting
-            ? "投稿中..."
-            : reviewStep === "reviewing"
-              ? "内容を確認して投稿する"
-              : postMode === "photo"
-                ? "AIで下書きを作成する"
-                : "AIでタグを提案する"}
-      </button>
+      {!isAiRejected ? (
+        <button
+          type="submit"
+          disabled={
+            isSubmitting ||
+            isChecking ||
+            isLocating ||
+            (reviewStep === "reviewing" && turnstileEnabled && !turnstileToken)
+          }
+          className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isChecking
+            ? postMode === "photo"
+              ? "AI下書き中..."
+              : "タグ提案中..."
+            : isSubmitting
+              ? "投稿中..."
+              : reviewStep === "reviewing"
+                ? "内容を確認して投稿する"
+                : postMode === "photo"
+                  ? "AIで下書きを作成する"
+                  : "AIでタグを提案する"}
+        </button>
+      ) : null}
 
-      {reviewStep === "reviewing" ? (
+      {reviewStep === "reviewing" || isAiRejected ? (
         <button
           type="button"
           onClick={resetForm}
