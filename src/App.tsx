@@ -167,15 +167,15 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 xl:px-8">
+      <main className="mx-auto max-w-7xl overflow-x-hidden px-4 py-6 md:px-6 xl:px-8">
         {errorMessage ? (
           <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {errorMessage}
           </div>
         ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <aside className="min-w-0 flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900">最近の投稿</h2>
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
@@ -183,13 +183,13 @@ function App() {
               </span>
             </div>
 
-            <div className="-mx-1 flex flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-2 xl:mx-0 xl:block xl:space-y-3 xl:overflow-x-visible xl:px-0 xl:pb-0">
+            <div className="flex w-full min-w-0 max-w-full flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 xl:block xl:space-y-3 xl:overflow-x-visible xl:pb-0">
               {isLoading ? (
-                <div className="min-w-full rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 xl:min-w-0">
+                <div className="w-full flex-none rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                   読み込み中です…
                 </div>
               ) : posts.length === 0 ? (
-                <div className="min-w-full rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 xl:min-w-0">
+                <div className="w-full flex-none rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                   まだ投稿はありません。最初の魅力を共有しましょう。
                 </div>
               ) : (
@@ -198,7 +198,7 @@ function App() {
                     key={post.id}
                     type="button"
                     onClick={() => handleSelectPost(post)}
-                    className={`w-72 flex-none snap-start overflow-hidden rounded-2xl border text-left transition duration-200 xl:w-full ${
+                    className={`w-[82vw] max-w-72 flex-none snap-start overflow-hidden rounded-2xl border text-left transition duration-200 xl:w-full xl:max-w-none ${
                       selectedPost?.id === post.id
                         ? "border-primary bg-emerald-50 shadow-sm"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
@@ -329,7 +329,7 @@ function App() {
             </div>
           </aside>
 
-          <section className="space-y-5">
+          <section className="min-w-0 space-y-5">
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm shadow-slate-200/60">
               <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                 <h2 className="text-lg font-bold text-slate-900">マップ</h2>
