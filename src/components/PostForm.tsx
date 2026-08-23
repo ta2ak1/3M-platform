@@ -6,7 +6,7 @@ import {
   TurnstileWidget,
 } from "./TurnstileWidget";
 
-type LocationSource = "exif" | "device" | "fallback";
+type LocationSource = "exif" | "device" | "manual" | "fallback";
 type PostMode = "photo" | "text";
 
 async function readExifLocation(
@@ -39,28 +39,6 @@ async function readExifLocation(
   } catch {
     return null;
   }
-}
-
-function getDeviceLocation(): Promise<{
-  latitude: number;
-  longitude: number;
-} | null> {
-  if (!navigator.geolocation) {
-    return Promise.resolve(null);
-  }
-
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-      },
-      () => resolve(null),
-      { timeout: 5000, enableHighAccuracy: false },
-    );
-  });
 }
 
 async function createAiSafePhoto(file: File): Promise<File> {
@@ -145,13 +123,11 @@ function parseTagInput(value: string): string[] {
 interface PostFormProps {
   onSubmit: (formData: FormData) => Promise<void>;
   defaultLocation?: { lat: number; lng: number };
-  onLocationResolved?: (location: { lat: number; lng: number }) => void;
 }
 
 export function PostForm({
   onSubmit,
   defaultLocation,
-  onLocationResolved,
 }: PostFormProps) {
   const [postMode, setPostMode] = useState<PostMode>("photo");
   const [title, setTitle] = useState("");
@@ -162,10 +138,8 @@ export function PostForm({
   const [isChecking, setIsChecking] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [locationSource, setLocationSource] =
-    useState<LocationSource>("fallback");
+    useState<LocationSource>("manual");
   const [capturedAt, setCapturedAt] = useState<string | undefined>(undefined);
-  const [resolvedLat, setResolvedLat] = useState<number | undefined>(undefined);
-  const [resolvedLng, setResolvedLng] = useState<number | undefined>(undefined);
   const [reviewStep, setReviewStep] = useState<"editing" | "reviewing">(
     "editing",
   );
@@ -244,10 +218,8 @@ export function PostForm({
     setTitle("");
     setSummary("");
     setPhotoFile(null);
-    setLocationSource("fallback");
+    setLocationSource("manual");
     setCapturedAt(undefined);
-    setResolvedLat(undefined);
-    setResolvedLng(undefined);
     setSuggestedTags([]);
     setReviewWarnings([]);
     setSelectedTags([]);
@@ -354,8 +326,8 @@ export function PostForm({
     setErrorMessage("");
 
     try {
-      const lat = defaultLocation?.lat ?? resolvedLat ?? 35.681236;
-      const lng = defaultLocation?.lng ?? resolvedLng ?? 139.767125;
+      const lat = defaultLocation?.lat ?? 35.681236;
+      const lng = defaultLocation?.lng ?? 139.767125;
 
       const formData = new FormData();
       formData.set("title", title.trim());
@@ -371,7 +343,10 @@ export function PostForm({
       if (capturedAt) {
         formData.set("capturedAt", capturedAt);
       }
-      formData.set("locationSource", locationSource);
+      formData.set(
+        "locationSource",
+        defaultLocation ? "manual" : locationSource,
+      );
       formData.set(
         "contentLicense",
         isCcByLicensed ? "cc-by-4.0" : "all-rights-reserved",
@@ -435,10 +410,8 @@ export function PostForm({
               resetDraft();
               if (nextMode === "text") {
                 setPhotoFile(null);
-                setLocationSource("fallback");
+                setLocationSource("manual");
                 setCapturedAt(undefined);
-                setResolvedLat(undefined);
-                setResolvedLng(undefined);
                 clearFileInput();
               }
             }}
@@ -506,10 +479,8 @@ export function PostForm({
               );
             }
             if (!file) {
-              setLocationSource("fallback");
+              setLocationSource("manual");
               setCapturedAt(undefined);
-              setResolvedLat(undefined);
-              setResolvedLng(undefined);
               return;
             }
 
@@ -517,34 +488,13 @@ export function PostForm({
             try {
               const exif = await readExifLocation(file);
               if (exif) {
-                setResolvedLat(exif.latitude);
-                setResolvedLng(exif.longitude);
-                onLocationResolved?.({
-                  lat: exif.latitude,
-                  lng: exif.longitude,
-                });
                 setCapturedAt(exif.capturedAt ?? new Date().toISOString());
-                setLocationSource("exif");
-                return;
-              }
-
-              const device = await getDeviceLocation();
-              if (device) {
-                setResolvedLat(device.latitude);
-                setResolvedLng(device.longitude);
-                onLocationResolved?.({
-                  lat: device.latitude,
-                  lng: device.longitude,
-                });
-                setCapturedAt(new Date().toISOString());
-                setLocationSource("device");
+                setLocationSource("manual");
                 return;
               }
 
               setCapturedAt(new Date().toISOString());
-              setLocationSource("fallback");
-              setResolvedLat(undefined);
-              setResolvedLng(undefined);
+              setLocationSource("manual");
             } finally {
               setIsLocating(false);
             }
@@ -552,25 +502,15 @@ export function PostForm({
           className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
         />
         {isLocating && (
-          <p className="mt-1 text-xs text-slate-500">位置情報を取得中...</p>
+          <p className="mt-1 text-xs text-slate-500">写真の情報を確認中...</p>
         )}
         {!isLocating && photoFile && (
           <p className="mt-1 text-xs text-slate-500">
-            取得元：
+            投稿位置：
             <span
-              className={`ml-1 inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${
-                locationSource === "exif"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : locationSource === "device"
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-slate-100 text-slate-600"
-              }`}
+              className="ml-1 inline-block rounded bg-violet-100 px-1.5 py-0.5 text-xs font-semibold text-violet-700"
             >
-              {locationSource === "exif"
-                ? "EXIF"
-                : locationSource === "device"
-                  ? "デバイス位置"
-                  : "デフォルト"}
+              マップ上の選択位置
             </span>
           </p>
         )}

@@ -414,7 +414,6 @@ function App() {
               <PostForm
                 onSubmit={handleSubmit}
                 defaultLocation={formLocation ?? DEFAULT_LOCATION}
-                onLocationResolved={setFormLocation}
               />
             </div>
           </section>
