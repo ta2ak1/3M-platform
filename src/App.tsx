@@ -10,6 +10,20 @@ import type { AdminPlace, CommunityPost } from "./types";
 const DEFAULT_LOCATION = { lat: 35.681236, lng: 139.767125 };
 type Location = typeof DEFAULT_LOCATION;
 
+function isSameBbox(a: BboxQuery | null, b: BboxQuery) {
+  if (!a) {
+    return false;
+  }
+
+  const epsilon = 0.000001;
+  return (
+    Math.abs(a.minLat - b.minLat) < epsilon &&
+    Math.abs(a.maxLat - b.maxLat) < epsilon &&
+    Math.abs(a.minLng - b.minLng) < epsilon &&
+    Math.abs(a.maxLng - b.maxLng) < epsilon
+  );
+}
+
 function App() {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [adminPlaces, setAdminPlaces] = useState<AdminPlace[]>([]);
@@ -60,6 +74,10 @@ function App() {
   }, []);
 
   const handleBoundsChange = useCallback((bbox: BboxQuery) => {
+    if (isSameBbox(mapBboxRef.current, bbox)) {
+      return;
+    }
+
     mapBboxRef.current = bbox;
     setMapBbox(bbox);
   }, []);

@@ -72,6 +72,7 @@ export function PostMap({
   const currentLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const draftLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const lastMapSizeRef = useRef("");
   // fitBounds による moveend で再取得ループを防ぐ
   const suppressMoveendRef = useRef(false);
   // 初回表示時のみ fitBounds を呼び出す
@@ -82,12 +83,29 @@ export function PostMap({
 
   // リサイズ監視処理
   useEffect(() => {
+    let resizeFrame: number | null = null;
+
     const resizeObserver = new ResizeObserver((entries) => {
       if (entries.length === 0) {
         return;
       }
 
-      mapRef.current?.invalidateSize();
+      const { width, height } = entries[0].contentRect;
+      const nextSize = `${Math.round(width)}x${Math.round(height)}`;
+      if (lastMapSizeRef.current === nextSize) {
+        return;
+      }
+
+      lastMapSizeRef.current = nextSize;
+
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
+
+      resizeFrame = window.requestAnimationFrame(() => {
+        mapRef.current?.invalidateSize({ pan: false });
+        resizeFrame = null;
+      });
     });
 
     if (mapContainerRef.current) {
@@ -95,6 +113,9 @@ export function PostMap({
     }
 
     return () => {
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
       resizeObserver.disconnect();
     };
   }, []);
