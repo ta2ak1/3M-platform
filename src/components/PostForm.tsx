@@ -145,9 +145,14 @@ function parseTagInput(value: string): string[] {
 interface PostFormProps {
   onSubmit: (formData: FormData) => Promise<void>;
   defaultLocation?: { lat: number; lng: number };
+  onLocationResolved?: (location: { lat: number; lng: number }) => void;
 }
 
-export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
+export function PostForm({
+  onSubmit,
+  defaultLocation,
+  onLocationResolved,
+}: PostFormProps) {
   const [postMode, setPostMode] = useState<PostMode>("photo");
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
@@ -258,6 +263,11 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
   };
 
   const handlePrecheck = async () => {
+    if (isLocating) {
+      setErrorMessage("位置情報の確認が終わってから、AI下書きを作成してください。");
+      return;
+    }
+
     if (postMode === "photo" && !photoFile) {
       setErrorMessage("投稿する写真を選択してください。");
       return;
@@ -344,8 +354,8 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
     setErrorMessage("");
 
     try {
-      const lat = resolvedLat ?? defaultLocation?.lat ?? 35.681236;
-      const lng = resolvedLng ?? defaultLocation?.lng ?? 139.767125;
+      const lat = defaultLocation?.lat ?? resolvedLat ?? 35.681236;
+      const lng = defaultLocation?.lng ?? resolvedLng ?? 139.767125;
 
       const formData = new FormData();
       formData.set("title", title.trim());
@@ -509,6 +519,10 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
               if (exif) {
                 setResolvedLat(exif.latitude);
                 setResolvedLng(exif.longitude);
+                onLocationResolved?.({
+                  lat: exif.latitude,
+                  lng: exif.longitude,
+                });
                 setCapturedAt(exif.capturedAt ?? new Date().toISOString());
                 setLocationSource("exif");
                 return;
@@ -518,6 +532,10 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
               if (device) {
                 setResolvedLat(device.latitude);
                 setResolvedLng(device.longitude);
+                onLocationResolved?.({
+                  lat: device.latitude,
+                  lng: device.longitude,
+                });
                 setCapturedAt(new Date().toISOString());
                 setLocationSource("device");
                 return;
@@ -784,6 +802,7 @@ export function PostForm({ onSubmit, defaultLocation }: PostFormProps) {
         disabled={
           isSubmitting ||
           isChecking ||
+          isLocating ||
           (reviewStep === "reviewing" && turnstileEnabled && !turnstileToken)
         }
         className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
