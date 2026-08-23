@@ -165,13 +165,13 @@ function App() {
               </span>
             </div>
 
-            <div className="flex-1 space-y-3">
+            <div className="-mx-1 flex flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-2 xl:mx-0 xl:block xl:space-y-3 xl:overflow-x-visible xl:px-0 xl:pb-0">
               {isLoading ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                <div className="min-w-full rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 xl:min-w-0">
                   読み込み中です…
                 </div>
               ) : posts.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                <div className="min-w-full rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 xl:min-w-0">
                   まだ投稿はありません。最初の魅力を共有しましょう。
                 </div>
               ) : (
@@ -180,7 +180,7 @@ function App() {
                     key={post.id}
                     type="button"
                     onClick={() => handleSelectPost(post)}
-                    className={`w-full overflow-hidden rounded-2xl border text-left transition duration-200 ${
+                    className={`w-72 flex-none snap-start overflow-hidden rounded-2xl border text-left transition duration-200 xl:w-full ${
                       selectedPost?.id === post.id
                         ? "border-primary bg-emerald-50 shadow-sm"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
