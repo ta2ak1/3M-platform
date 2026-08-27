@@ -1,11 +1,13 @@
 const source = "https://catalog.data.metro.tokyo.lg.jp/dataset/t000008d2000000024";
 const ccBy = "https://creativecommons.org/licenses/by/4.0/deed.ja";
+const osmCopyright = "https://www.openstreetmap.org/copyright";
 
 export function LegalNotice() {
   return (
     <footer className="border-t border-slate-200 bg-white">
       <div className="mx-auto max-w-7xl space-y-2 px-4 py-6 text-xs leading-5 text-slate-600 md:px-6 xl:px-8">
         <p><strong>行政オープンデータの出典：</strong>東京都都市整備局「緑のオープンデータ（GISデータ）」を加工して作成（CC BY 4.0、利用日：2026年8月22日）。 <a className="text-primary underline" href={source} target="_blank" rel="noreferrer">データセット</a></p>
+        <p><strong>地図データ：</strong><a className="text-primary underline" href={osmCopyright} target="_blank" rel="noreferrer">© OpenStreetMap contributors</a></p>
         <p>本サービスによる加工であり、東京都が作成・推奨するものではありません。</p>
         <details>
           <summary className="cursor-pointer font-semibold text-slate-800">利用規約・投稿データの取り扱い</summary>
