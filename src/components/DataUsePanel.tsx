@@ -168,6 +168,7 @@ export function DataUsePanel({
     useState<RegionalInsight | null>(null);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [insightError, setInsightError] = useState<string | null>(null);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (
@@ -286,6 +287,7 @@ export function DataUsePanel({
   useEffect(() => {
     setRegionalInsight(null);
     setInsightError(null);
+    setCopyMessage(null);
   }, [
     activeScopeLabel,
     insightLens,
@@ -316,6 +318,63 @@ export function DataUsePanel({
       );
     } finally {
       setIsGeneratingInsight(false);
+    }
+  };
+
+  const buildRegionalInsightReport = (insight: RegionalInsight) => {
+    const lensLabel =
+      insightLensOptions.find((option) => option.value === insight.lens)
+        ?.label ?? "自治体施策";
+
+    return [
+      "# 3M Platform AI地域インサイト",
+      "",
+      `- 分析範囲: ${activeScopeLabel}`,
+      `- 分析視点: ${lensLabel}`,
+      `- 市民投稿: ${activePosts.length.toLocaleString("ja-JP")}件`,
+      `- 行政オープンデータ: ${activeVisibleSeedCount.toLocaleString("ja-JP")}件`,
+      `- 上位タグ: ${topTagSummary}`,
+      `- CC BY率: ${ccByRate}%`,
+      `- 行政データとの近さ: ${nearestDistanceSummary}`,
+      `- 生成方式: ${insight.source === "ai" ? "Workers AI" : "簡易インサイト"}`,
+      "",
+      "## この地域の特徴",
+      insight.overview,
+      "",
+      "## 市民投稿から見える魅力",
+      insight.civicSignals,
+      "",
+      "## 行政データとのギャップ",
+      insight.adminGap,
+      "",
+      "## 活用・改善のヒント",
+      insight.actionHint,
+      "",
+      "## 次に集めたい投稿テーマ",
+      insight.collectionTheme,
+      "",
+      "## データ品質・再利用性メモ",
+      insight.dataQualityNote,
+      "",
+      "## 注意",
+      insight.caveat,
+    ].join("\n");
+  };
+
+  const handleCopyRegionalInsight = async () => {
+    if (!regionalInsight) {
+      return;
+    }
+
+    const report = buildRegionalInsightReport(regionalInsight);
+
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopyMessage("AI地域インサイトをコピーしました。");
+    } catch {
+      setCopyMessage(
+        "コピーできませんでした。ブラウザの権限設定を確認してください。",
+      );
     }
   };
 
@@ -471,19 +530,36 @@ export function DataUsePanel({
               {activeScopeLabel}の市民投稿・行政オープンデータ・タグ傾向をもとに、地域の特徴やギャップ、活用ヒントを短く整理します。
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleGenerateRegionalInsight}
-            disabled={isGeneratingInsight || isLoadingAllData}
-            className="w-full rounded-full bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300 md:w-auto"
-          >
-            {isGeneratingInsight ? "AI分析中..." : "AIで地域を読み解く"}
-          </button>
+          <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
+            <button
+              type="button"
+              onClick={handleGenerateRegionalInsight}
+              disabled={isGeneratingInsight || isLoadingAllData}
+              className="w-full rounded-full bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300 md:w-auto"
+            >
+              {isGeneratingInsight ? "AI分析中..." : "AIで地域を読み解く"}
+            </button>
+            {regionalInsight ? (
+              <button
+                type="button"
+                onClick={handleCopyRegionalInsight}
+                className="w-full rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-bold text-violet-700 transition hover:bg-violet-50 md:w-auto"
+              >
+                インサイトをコピー
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {insightError ? (
           <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {insightError}
+          </p>
+        ) : null}
+
+        {copyMessage ? (
+          <p className="mt-4 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+            {copyMessage}
           </p>
         ) : null}
 
