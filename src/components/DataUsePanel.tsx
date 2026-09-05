@@ -283,6 +283,59 @@ export function DataUsePanel({
     nearbyPairs.length > 0
       ? `最短 約${Math.round(nearbyPairs[0].distanceMeters).toLocaleString("ja-JP")}m`
       : "近接関係なし";
+  const dataReadinessChecks = [
+    {
+      label: "市民投稿",
+      ok: activePosts.length >= 5,
+      message:
+        activePosts.length >= 5
+          ? "分析に使える投稿が集まり始めています"
+          : "まずは5件以上の投稿があると傾向を読みやすくなります",
+    },
+    {
+      label: "タグ",
+      ok: uniqueTagCount >= 3,
+      message:
+        uniqueTagCount >= 3
+          ? "複数の切り口で地域を比較できます"
+          : "タグの種類が増えると、魅力や課題の違いが見えやすくなります",
+    },
+    {
+      label: "行政データ",
+      ok: activeVisibleSeedCount > 0,
+      message:
+        activeVisibleSeedCount > 0
+          ? "行政データとの比較ができます"
+          : "行政データがない範囲では、市民投稿中心の分析になります",
+    },
+    {
+      label: "近接関係",
+      ok: nearbyPairs.length > 0,
+      message:
+        nearbyPairs.length > 0
+          ? "市民投稿と行政データの近さを説明できます"
+          : "市民投稿と行政データが近い場所にあると、ギャップ分析がしやすくなります",
+    },
+    {
+      label: "再利用性",
+      ok: activePosts.length > 0 && ccByRate >= 50,
+      message:
+        activePosts.length > 0 && ccByRate >= 50
+          ? "再利用しやすい投稿が多い状態です"
+          : "CC BY 4.0同意の投稿が増えると、外部活用しやすくなります",
+    },
+  ];
+  const dataReadinessScore = Math.round(
+    (dataReadinessChecks.filter((check) => check.ok).length /
+      dataReadinessChecks.length) *
+      100,
+  );
+  const dataReadinessLabel =
+    dataReadinessScore >= 80
+      ? "活用しやすい"
+      : dataReadinessScore >= 50
+        ? "育成中"
+        : "収集中";
 
   useEffect(() => {
     setRegionalInsight(null);
@@ -336,6 +389,7 @@ export function DataUsePanel({
       `- 上位タグ: ${topTagSummary}`,
       `- CC BY率: ${ccByRate}%`,
       `- 行政データとの近さ: ${nearestDistanceSummary}`,
+      `- データ充実度: ${dataReadinessScore}%（${dataReadinessLabel}）`,
       `- 生成方式: ${insight.source === "ai" ? "Workers AI" : "簡易インサイト"}`,
       "",
       "## この地域の特徴",
@@ -517,6 +571,61 @@ export function DataUsePanel({
         </div>
       </div>
 
+      <div className="rounded-3xl border border-sky-200 bg-white p-5 shadow-sm shadow-sky-100/70">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">
+              Data readiness
+            </p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              AI分析に向けたデータ充実度
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              AI地域インサイトの前提になる投稿数・タグ・行政データとの関係・再利用性を確認します。
+            </p>
+          </div>
+          <div className="rounded-2xl bg-sky-50 px-5 py-4 text-center">
+            <p className="text-xs font-bold text-sky-700">
+              {dataReadinessLabel}
+            </p>
+            <p className="mt-1 text-3xl font-black text-slate-900">
+              {dataReadinessScore}%
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-5">
+          {dataReadinessChecks.map((check) => (
+            <div
+              key={check.label}
+              className={`rounded-2xl border p-3 ${
+                check.ok
+                  ? "border-sky-100 bg-sky-50/70"
+                  : "border-slate-200 bg-slate-50"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    check.ok
+                      ? "bg-sky-600 text-white"
+                      : "bg-slate-200 text-slate-500"
+                  }`}
+                >
+                  {check.ok ? "✓" : "!"}
+                </span>
+                <p className="text-sm font-bold text-slate-800">
+                  {check.label}
+                </p>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-600">
+                {check.message}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="rounded-3xl border border-violet-200 bg-white p-5 shadow-sm shadow-violet-100/70">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -610,6 +719,10 @@ export function DataUsePanel({
                   ["上位タグ", topTagSummary],
                   ["CC BY率", `${ccByRate}%`],
                   ["行政データとの近さ", nearestDistanceSummary],
+                  [
+                    "データ充実度",
+                    `${dataReadinessScore}%（${dataReadinessLabel}）`,
+                  ],
                 ].map(([label, value]) => (
                   <div
                     key={label}
