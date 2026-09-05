@@ -23,6 +23,20 @@ type NearbyPair = {
   distanceMeters: number;
 };
 
+type GapCandidate =
+  | {
+      type: "admin_without_posts";
+      place: AdminPlace;
+      nearestPost?: CommunityPost;
+      distanceMeters?: number;
+    }
+  | {
+      type: "post_without_admin";
+      post: CommunityPost;
+      nearestPlace?: AdminPlace;
+      distanceMeters?: number;
+    };
+
 type InsightScope = "visible" | "all";
 type InsightLens = "policy" | "tourism" | "community";
 
@@ -288,6 +302,71 @@ export function DataUsePanel({
       .slice(0, 5);
   }, [activeAdminPlaces, activePosts]);
 
+  const gapCandidates = useMemo<GapCandidate[]>(() => {
+    const adminWithoutPosts = activeAdminPlaces
+      .map((place) => {
+        const nearestPost = activePosts
+          .map((post) => ({
+            post,
+            distanceMeters: getDistanceMeters(place, post),
+          }))
+          .sort((a, b) => a.distanceMeters - b.distanceMeters)[0];
+
+        return {
+          type: "admin_without_posts" as const,
+          place,
+          nearestPost: nearestPost?.post,
+          distanceMeters: nearestPost?.distanceMeters,
+        };
+      })
+      .filter(
+        (candidate) =>
+          candidate.distanceMeters == null || candidate.distanceMeters > 200,
+      )
+      .sort(
+        (a, b) =>
+          (b.distanceMeters ?? Number.MAX_SAFE_INTEGER) -
+          (a.distanceMeters ?? Number.MAX_SAFE_INTEGER),
+      )
+      .slice(0, 3);
+
+    const postsWithoutAdmin = activePosts
+      .map((post) => {
+        const nearestPlace = activeAdminPlaces
+          .map((place) => ({
+            place,
+            distanceMeters: getDistanceMeters(post, place),
+          }))
+          .sort((a, b) => a.distanceMeters - b.distanceMeters)[0];
+
+        return {
+          type: "post_without_admin" as const,
+          post,
+          nearestPlace: nearestPlace?.place,
+          distanceMeters: nearestPlace?.distanceMeters,
+        };
+      })
+      .filter(
+        (candidate) =>
+          candidate.distanceMeters == null || candidate.distanceMeters > 200,
+      )
+      .sort(
+        (a, b) =>
+          (b.distanceMeters ?? Number.MAX_SAFE_INTEGER) -
+          (a.distanceMeters ?? Number.MAX_SAFE_INTEGER),
+      )
+      .slice(0, 3);
+
+    return [...adminWithoutPosts, ...postsWithoutAdmin];
+  }, [activeAdminPlaces, activePosts]);
+
+  const adminGapCount = gapCandidates.filter(
+    (candidate) => candidate.type === "admin_without_posts",
+  ).length;
+  const civicDiscoveryCount = gapCandidates.filter(
+    (candidate) => candidate.type === "post_without_admin",
+  ).length;
+
   const ccByPostCount = activePosts.filter(
     (post) => post.contentLicense === "cc-by-4.0",
   ).length;
@@ -422,6 +501,7 @@ export function DataUsePanel({
       `- 都市体験タグ: ${urbanExperienceTagCount}種 / ${urbanExperienceTaggedPostCount}投稿`,
       `- CC BY率: ${ccByRate}%`,
       `- 行政データとの近さ: ${nearestDistanceSummary}`,
+      `- ギャップ候補: 行政データ側 ${adminGapCount}件 / 市民発見側 ${civicDiscoveryCount}件`,
       `- データ充実度: ${dataReadinessScore}%（${dataReadinessLabel}）`,
       `- 生成方式: ${insight.source === "ai" ? "Workers AI" : "簡易インサイト"}`,
       "",
@@ -756,9 +836,13 @@ export function DataUsePanel({
                   ],
                   ["CC BY率", `${ccByRate}%`],
                   ["行政データとの近さ", nearestDistanceSummary],
+                [
+                  "データ充実度",
+                  `${dataReadinessScore}%（${dataReadinessLabel}）`,
+                ],
                   [
-                    "データ充実度",
-                    `${dataReadinessScore}%（${dataReadinessLabel}）`,
+                    "ギャップ候補",
+                    `${adminGapCount + civicDiscoveryCount}件`,
                   ],
                 ].map(([label, value]) => (
                   <div
@@ -811,6 +895,82 @@ export function DataUsePanel({
         ) : (
           <p className="mt-4 rounded-2xl bg-violet-50 px-4 py-3 text-sm leading-6 text-violet-900">
             デモでは、投稿が少ない状態でも「どのデータをもとに何が言えるか」をAIが慎重に整理する様子を見せられます。
+          </p>
+        )}
+      </div>
+
+      <div className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm shadow-amber-100/70">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-600">
+              Gap candidates
+            </p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              行政データと市民投稿のギャップ候補
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              200m以内に対応する相手側データが少ない場所を、追加調査や投稿収集の候補として表示します。
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">
+              行政側 {adminGapCount}件
+            </span>
+            <span className="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700">
+              市民発見側 {civicDiscoveryCount}件
+            </span>
+          </div>
+        </div>
+
+        {gapCandidates.length > 0 ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {gapCandidates.map((candidate) => {
+              const isAdminGap = candidate.type === "admin_without_posts";
+              const title = isAdminGap
+                ? candidate.place.name
+                : candidate.post.title;
+              const description = isAdminGap
+                ? `行政データ「${candidate.place.category}」はありますが、近い市民投稿がまだ薄い候補です。`
+                : "市民投稿はありますが、近い行政オープンデータが少ない候補です。";
+              const distanceText =
+                candidate.distanceMeters == null
+                  ? "比較対象なし"
+                  : `最寄りまで約${Math.round(candidate.distanceMeters).toLocaleString("ja-JP")}m`;
+
+              return (
+                <div
+                  key={`${candidate.type}-${isAdminGap ? candidate.place.id : candidate.post.id}`}
+                  className={`rounded-2xl border p-4 ${
+                    isAdminGap
+                      ? "border-amber-100 bg-amber-50/60"
+                      : "border-orange-100 bg-orange-50/60"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-500">
+                        {isAdminGap
+                          ? "行政データ側の空白"
+                          : "市民発見側の空白"}
+                      </p>
+                      <p className="mt-1 truncate text-sm font-bold text-slate-900">
+                        {title}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-600">
+                      {distanceText}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-slate-600">
+                    {description}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+            現在の集計範囲では、目立つギャップ候補は見つかりませんでした。表示範囲を変えるか、投稿が増えると候補が出やすくなります。
           </p>
         )}
       </div>
