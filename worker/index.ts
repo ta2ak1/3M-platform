@@ -77,6 +77,7 @@ type AdminPlace = {
 };
 
 type RegionalInsight = {
+  lens: "policy" | "tourism" | "community";
   overview: string;
   civicSignals: string;
   adminGap: string;
@@ -1063,6 +1064,7 @@ function sanitizeInsightText(value: unknown, fallback: string, maxLength = 180) 
 
 function buildFallbackRegionalInsight(input: {
   scope: "visible" | "all";
+  lens: "policy" | "tourism" | "community";
   posts: CommunityPost[];
   adminPlaces: AdminPlace[];
   seedCount: number;
@@ -1071,10 +1073,17 @@ function buildFallbackRegionalInsight(input: {
   ccByPostCount: number;
 }): RegionalInsight {
   const scopeLabel = input.scope === "all" ? "全件データ" : "表示範囲";
+  const lensLabel =
+    input.lens === "tourism"
+      ? "観光・地域PR"
+      : input.lens === "community"
+        ? "市民活動"
+        : "自治体施策";
   const topTags = input.tagRanking.slice(0, 3).map((item) => `#${item.tag}`);
   const topTagText = topTags.length > 0 ? topTags.join("、") : "タグはまだ少なめ";
 
   return {
+    lens: input.lens,
     overview: `${scopeLabel}では、市民投稿${input.posts.length}件と行政オープンデータ${input.visibleSeedCount}件を比較できます。`,
     civicSignals:
       input.posts.length > 0
@@ -1086,7 +1095,7 @@ function buildFallbackRegionalInsight(input: {
         : "行政データまたは市民投稿が不足しているため、ギャップ分析は限定的です。",
     actionHint:
       input.posts.length > 0
-        ? "上位タグ周辺の投稿を増やし、CSV/GeoJSONで二次利用すると、観光・まち歩き・施策検討の素材になります。"
+        ? `${lensLabel}の観点では、上位タグ周辺の投稿を増やし、CSV/GeoJSONで二次利用すると検討素材になります。`
         : "まずは写真付き投稿を数件集め、タグと位置のばらつきを確認すると分析の出発点になります。",
     collectionTheme:
       input.posts.length > 0
@@ -1106,6 +1115,7 @@ async function runRegionalInsight(
   env: CloudflareEnv,
   input: {
     scope: "visible" | "all";
+    lens: "policy" | "tourism" | "community";
     posts: CommunityPost[];
     adminPlaces: AdminPlace[];
     seedCount: number;
@@ -1117,6 +1127,12 @@ async function runRegionalInsight(
   const fallback = buildFallbackRegionalInsight(input);
 
   try {
+    const lensInstruction =
+      input.lens === "tourism"
+        ? "観光・地域PR担当者の視点で、回遊、地域資源、まち歩き、発信素材としての可能性を重視してください。"
+        : input.lens === "community"
+          ? "市民活動・地域団体の視点で、住民参加、身近な困りごと、追加で集めたい声を重視してください。"
+          : "自治体職員の視点で、施策検討、公共空間、行政データとのギャップ、追加調査候補を重視してください。";
     const representativePosts = input.posts.slice(0, 8).map((post) => ({
       title: post.title,
       summary: post.summary,
@@ -1148,6 +1164,7 @@ async function runRegionalInsight(
           content: `
             次の集計データから、地域インサイトを日本語で作成してください。
             目的は「行政データと市民投稿のギャップや活用ヒント」をデモで分かりやすく示すことです。
+            分析視点: ${lensInstruction}
 
             制約:
             - 各項目は80〜140字程度
@@ -1167,6 +1184,7 @@ async function runRegionalInsight(
             }
 
             集計範囲: ${input.scope === "all" ? "全件データ" : "表示範囲"}
+            分析視点キー: ${input.lens}
             市民投稿数: ${input.posts.length}
             行政オープンデータ件数: ${input.visibleSeedCount}
             行政オープンデータ総数: ${input.seedCount}
@@ -1182,6 +1200,7 @@ async function runRegionalInsight(
     const parsed = normalizeJsonResponse(response);
 
     return {
+      lens: input.lens,
       overview: sanitizeInsightText(parsed.overview, fallback.overview),
       civicSignals: sanitizeInsightText(
         parsed.civicSignals ?? parsed.civic_signals,
@@ -1273,6 +1292,7 @@ app.get("/api/posts", async (c) => {
 app.post("/api/insights/region", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as {
     scope?: string;
+    lens?: string;
     posts?: CommunityPost[];
     adminPlaces?: AdminPlace[];
     seedCount?: number;
@@ -1328,6 +1348,10 @@ app.post("/api/insights/region", async (c) => {
 
   const insight = await runRegionalInsight(c.env, {
     scope: body.scope === "all" ? "all" : "visible",
+    lens:
+      body.lens === "tourism" || body.lens === "community"
+        ? body.lens
+        : "policy",
     posts,
     adminPlaces,
     seedCount: Number.isFinite(body.seedCount) ? Number(body.seedCount) : 0,

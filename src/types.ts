@@ -25,6 +25,7 @@ export type AdminPlace = {
 };
 
 export type RegionalInsight = {
+  lens: "policy" | "tourism" | "community";
   overview: string;
   civicSignals: string;
   adminGap: string;

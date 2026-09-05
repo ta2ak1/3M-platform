@@ -138,6 +138,7 @@ export async function precheckPost(formData: FormData): Promise<{
 
 export async function fetchRegionalInsight(payload: {
   scope: "visible" | "all";
+  lens: "policy" | "tourism" | "community";
   posts: CommunityPost[];
   adminPlaces: AdminPlace[];
   seedCount: number;

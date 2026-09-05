@@ -20,6 +20,29 @@ type NearbyPair = {
 };
 
 type InsightScope = "visible" | "all";
+type InsightLens = "policy" | "tourism" | "community";
+
+const insightLensOptions: {
+  value: InsightLens;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "policy",
+    label: "自治体施策",
+    description: "公共空間や行政データとのギャップを読む",
+  },
+  {
+    value: "tourism",
+    label: "観光・地域PR",
+    description: "回遊や地域資源としての魅力を読む",
+  },
+  {
+    value: "community",
+    label: "市民活動",
+    description: "住民参加や次に集めたい声を読む",
+  },
+];
 
 const ALL_DATA_LIMIT = 10000;
 const ALL_POST_LIMIT = 1000;
@@ -133,6 +156,7 @@ export function DataUsePanel({
   visibleSeedCount,
 }: DataUsePanelProps) {
   const [scope, setScope] = useState<InsightScope>("visible");
+  const [insightLens, setInsightLens] = useState<InsightLens>("policy");
   const [allPosts, setAllPosts] = useState<CommunityPost[] | null>(null);
   const [allAdminPlaces, setAllAdminPlaces] = useState<AdminPlace[] | null>(
     null,
@@ -264,6 +288,7 @@ export function DataUsePanel({
     setInsightError(null);
   }, [
     activeScopeLabel,
+    insightLens,
     activePosts.length,
     activeAdminPlaces.length,
     tagRanking.map((item) => `${item.tag}:${item.count}`).join("|"),
@@ -276,6 +301,7 @@ export function DataUsePanel({
     try {
       const insight = await fetchRegionalInsight({
         scope: usesAllData ? "all" : "visible",
+        lens: insightLens,
         posts: activePosts,
         adminPlaces: activeAdminPlaces,
         seedCount: activeSeedCount,
@@ -461,6 +487,31 @@ export function DataUsePanel({
           </p>
         ) : null}
 
+        <div className="mt-5 rounded-2xl bg-slate-50 p-2">
+          <p className="px-2 py-1 text-xs font-bold text-slate-500">
+            AIの分析視点
+          </p>
+          <div className="mt-1 grid gap-2 md:grid-cols-3">
+            {insightLensOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setInsightLens(option.value)}
+                className={`rounded-xl px-3 py-3 text-left transition ${
+                  insightLens === option.value
+                    ? "bg-white text-violet-700 shadow-sm ring-1 ring-violet-200"
+                    : "text-slate-600 hover:bg-white/70"
+                }`}
+              >
+                <span className="block text-sm font-bold">{option.label}</span>
+                <span className="mt-1 block text-xs leading-5">
+                  {option.description}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {regionalInsight ? (
           <div className="mt-5 space-y-4">
             <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
@@ -470,6 +521,12 @@ export function DataUsePanel({
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   ["分析範囲", activeScopeLabel],
+                  [
+                    "分析視点",
+                    insightLensOptions.find(
+                      (option) => option.value === regionalInsight.lens,
+                    )?.label ?? "自治体施策",
+                  ],
                   [
                     "投稿 / 行政データ",
                     `${activePosts.length.toLocaleString("ja-JP")}件 / ${activeVisibleSeedCount.toLocaleString("ja-JP")}件`,
