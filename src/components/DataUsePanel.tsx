@@ -4,6 +4,10 @@ import {
   fetchPosts,
   fetchRegionalInsight,
 } from "../lib/api";
+import {
+  isUrbanExperienceTag,
+  splitUrbanExperienceTags,
+} from "../lib/urbanExperienceTags";
 import type { AdminPlace, CommunityPost, RegionalInsight } from "../types";
 
 type DataUsePanelProps = {
@@ -249,6 +253,23 @@ export function DataUsePanel({
     return tags.size;
   }, [activePosts]);
 
+  const urbanExperienceTagCount = useMemo(() => {
+    const tags = new Set<string>();
+    activePosts.forEach((post) => {
+      getPostTags(post).forEach((tag) => {
+        if (isUrbanExperienceTag(tag)) {
+          tags.add(tag);
+        }
+      });
+    });
+    return tags.size;
+  }, [activePosts]);
+
+  const urbanExperienceTaggedPostCount = activePosts.filter((post) => {
+    const { standardTags } = splitUrbanExperienceTags(getPostTags(post));
+    return standardTags.length > 0;
+  }).length;
+
   const nearbyPairs = useMemo<NearbyPair[]>(() => {
     return activePosts
       .map((post) => {
@@ -299,6 +320,17 @@ export function DataUsePanel({
         uniqueTagCount >= 3
           ? "複数の切り口で地域を比較できます"
           : "タグの種類が増えると、魅力や課題の違いが見えやすくなります",
+    },
+    {
+      label: "都市体験タグ",
+      ok:
+        activePosts.length > 0 &&
+        urbanExperienceTaggedPostCount >= Math.min(activePosts.length, 3),
+      message:
+        activePosts.length > 0 &&
+        urbanExperienceTaggedPostCount >= Math.min(activePosts.length, 3)
+          ? "分析しやすい標準タグが投稿に付いています"
+          : "都市体験タグが増えると、地域比較やギャップ分析に使いやすくなります",
     },
     {
       label: "行政データ",
@@ -387,6 +419,7 @@ export function DataUsePanel({
       `- 市民投稿: ${activePosts.length.toLocaleString("ja-JP")}件`,
       `- 行政オープンデータ: ${activeVisibleSeedCount.toLocaleString("ja-JP")}件`,
       `- 上位タグ: ${topTagSummary}`,
+      `- 都市体験タグ: ${urbanExperienceTagCount}種 / ${urbanExperienceTaggedPostCount}投稿`,
       `- CC BY率: ${ccByRate}%`,
       `- 行政データとの近さ: ${nearestDistanceSummary}`,
       `- データ充実度: ${dataReadinessScore}%（${dataReadinessLabel}）`,
@@ -566,7 +599,7 @@ export function DataUsePanel({
             {uniqueTagCount.toLocaleString("ja-JP")}種
           </p>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            市民が見つけた魅力の切り口です。
+            うち都市体験タグは{urbanExperienceTagCount.toLocaleString("ja-JP")}種です。
           </p>
         </div>
       </div>
@@ -717,6 +750,10 @@ export function DataUsePanel({
                     `${activePosts.length.toLocaleString("ja-JP")}件 / ${activeVisibleSeedCount.toLocaleString("ja-JP")}件`,
                   ],
                   ["上位タグ", topTagSummary],
+                  [
+                    "都市体験タグ",
+                    `${urbanExperienceTagCount.toLocaleString("ja-JP")}種 / ${urbanExperienceTaggedPostCount.toLocaleString("ja-JP")}投稿`,
+                  ],
                   ["CC BY率", `${ccByRate}%`],
                   ["行政データとの近さ", nearestDistanceSummary],
                   [
@@ -792,6 +829,11 @@ export function DataUsePanel({
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
                     #{item.tag}
+                    {isUrbanExperienceTag(item.tag) ? (
+                      <span className="ml-2 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+                        都市体験
+                      </span>
+                    ) : null}
                   </span>
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
                     {item.count}件

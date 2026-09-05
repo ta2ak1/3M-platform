@@ -1,5 +1,6 @@
 import { Hono, type Env } from "hono";
 import seedGeojsonRaw from "../src/assets/seed.geojson?raw";
+import { urbanExperienceTags } from "../src/lib/urbanExperienceTags";
 import type { CommunityPost } from "../src/types";
 
 type CloudflareEnv = {
@@ -555,11 +556,23 @@ function sanitizeTags(tags: string[]): string[] {
     "公園",
     "町",
     "自然",
+    ...urbanExperienceTags,
   ]);
 
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
     .filter((tag) => tag.length <= 20)
     .filter((tag) => allowed.has(tag) || tag.length >= 2);
+}
+
+function buildUrbanExperienceTagInstruction() {
+  return `
+    タグ候補は、次の「都市体験タグ」から3〜6個を優先して選んでください。
+    写真や文章から読み取れないタグは付けないでください。
+    必要な場合のみ、都市体験タグに加えて短い自由タグを1個まで追加できます。
+
+    都市体験タグ:
+    ${urbanExperienceTags.join("、")}
+  `;
 }
 
 function sanitizeDraftText(value: unknown, fallback: string, maxLength: number) {
@@ -925,9 +938,9 @@ async function runTagSuggestion(
           role: "user",
           content: `
             この画像とコメントをもとに、投稿に使えるタグ候補を3〜6個作成してください。
-            既存のタグに依存せず、自然で適切な日本語タグを返してください。
+            ${buildUrbanExperienceTagInstruction()}
             出力は必ず JSON で以下の形式にしてください:
-            { "tags": ["温泉", "景色", "夜景"] }
+            { "tags": ["緑がある", "休憩しやすい", "季節を感じる"] }
 
             タイトル: ${title}
             コメント: ${comment}
@@ -978,8 +991,9 @@ async function runPhotoDraftSuggestion(
           content: `
             この写真をもとに、投稿タイトル、一言コメント、タグ候補を作成してください。
             誇張しすぎず、写真から読み取れる範囲で具体的にしてください。
+            ${buildUrbanExperienceTagInstruction()}
             出力は必ず JSON で以下の形式にしてください:
-            { "title": "短いタイトル", "summary": "一言コメント", "tags": ["公園", "散歩", "自然"] }
+            { "title": "短いタイトル", "summary": "一言コメント", "tags": ["緑がある", "歩きやすい", "地域らしさ"] }
           `,
         },
       ],
@@ -1028,8 +1042,9 @@ async function runTextTagSuggestion(
           role: "user",
           content: `
             次の投稿文からタグ候補を3〜6個作成してください。
+            ${buildUrbanExperienceTagInstruction()}
             出力は必ず JSON で以下の形式にしてください:
-            { "tags": ["公園", "散歩", "自然"] }
+            { "tags": ["休憩しやすい", "静か", "ベンチがある"] }
 
             タイトル: ${title}
             コメント: ${comment}

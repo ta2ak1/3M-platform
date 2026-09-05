@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import exifr from "exifr";
 import { precheckPost } from "../lib/api";
+import { isUrbanExperienceTag } from "../lib/urbanExperienceTags";
 import {
   isTurnstileEnabled,
   TurnstileWidget,
@@ -118,6 +119,18 @@ function parseTagInput(value: string): string[] {
       .map((tag) => tag.trim())
       .filter(Boolean),
   );
+}
+
+function getTagButtonClass(isSelected: boolean, isStandard: boolean) {
+  if (isSelected) {
+    return isStandard
+      ? "border-violet-600 bg-violet-600 text-white"
+      : "border-primary bg-primary text-white";
+  }
+
+  return isStandard
+    ? "border-violet-200 bg-violet-50 text-violet-700"
+    : "border-primary/20 bg-primary/5 text-primary";
 }
 
 interface PostFormProps {
@@ -564,12 +577,16 @@ export function PostForm({
 
               <div className="rounded-xl border border-emerald-100 bg-white p-3">
                 <div className="text-sm font-semibold text-slate-800">
-                  AI候補タグ
+                  AI候補タグ（都市体験タグ優先）
                 </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  地域比較やAI分析に使いやすい標準タグを中心に提案します。
+                </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {suggestedTags.length > 0 ? (
                     suggestedTags.map((tag) => {
                       const isSelected = selectedTags.includes(tag);
+                      const isStandard = isUrbanExperienceTag(tag);
                       return (
                         <button
                           key={tag}
@@ -581,13 +598,15 @@ export function PostForm({
                                 : [...current, tag],
                             );
                           }}
-                          className={`rounded-full border px-3 py-1 text-xs transition ${
-                            isSelected
-                              ? "border-primary bg-primary text-white"
-                              : "border-primary/20 bg-primary/5 text-primary"
-                          }`}
+                          className={`rounded-full border px-3 py-1 text-xs transition ${getTagButtonClass(
+                            isSelected,
+                            isStandard,
+                          )}`}
                         >
                           #{tag}
+                          {isStandard ? (
+                            <span className="ml-1 opacity-80">都市体験</span>
+                          ) : null}
                         </button>
                       );
                     })
@@ -619,9 +638,17 @@ export function PostForm({
                           current.filter((item) => item !== tag),
                         );
                       }}
-                      className="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs text-slate-700 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+                      className={`rounded-full border px-3 py-1 text-xs transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 ${
+                        isUrbanExperienceTag(tag)
+                          ? "border-violet-200 bg-violet-50 text-violet-700"
+                          : "border-slate-300 bg-slate-50 text-slate-700"
+                      }`}
                     >
-                      #{tag} ×
+                      #{tag}
+                      {isUrbanExperienceTag(tag) ? (
+                        <span className="ml-1 opacity-70">都市体験</span>
+                      ) : null}{" "}
+                      ×
                     </button>
                   ))}
                 </div>
@@ -716,6 +743,7 @@ export function PostForm({
           <div className="flex flex-wrap gap-2">
             {suggestedTags.map((tag) => {
               const isSelected = selectedTags.includes(tag);
+              const isStandard = isUrbanExperienceTag(tag);
               return (
                 <button
                   key={tag}
@@ -727,13 +755,15 @@ export function PostForm({
                         : [...current, tag],
                     );
                   }}
-                  className={`rounded-full border px-2 py-1 text-xs transition ${
-                    isSelected
-                      ? "border-primary bg-primary text-white"
-                      : "border-primary/20 bg-primary/5 text-primary"
-                  }`}
+                  className={`rounded-full border px-2 py-1 text-xs transition ${getTagButtonClass(
+                    isSelected,
+                    isStandard,
+                  )}`}
                 >
                   #{tag}
+                  {isStandard ? (
+                    <span className="ml-1 opacity-80">都市体験</span>
+                  ) : null}
                 </button>
               );
             })}
