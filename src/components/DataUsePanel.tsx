@@ -245,6 +245,19 @@ export function DataUsePanel({
   const ccByPostCount = activePosts.filter(
     (post) => post.contentLicense === "cc-by-4.0",
   ).length;
+  const ccByRate =
+    activePosts.length > 0 ? Math.round((ccByPostCount / activePosts.length) * 100) : 0;
+  const topTagSummary =
+    tagRanking.length > 0
+      ? tagRanking
+          .slice(0, 3)
+          .map((item) => `#${item.tag}`)
+          .join("、")
+      : "タグ未蓄積";
+  const nearestDistanceSummary =
+    nearbyPairs.length > 0
+      ? `最短 約${Math.round(nearbyPairs[0].distanceMeters).toLocaleString("ja-JP")}m`
+      : "近接関係なし";
 
   useEffect(() => {
     setRegionalInsight(null);
@@ -449,7 +462,38 @@ export function DataUsePanel({
         ) : null}
 
         {regionalInsight ? (
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
+          <div className="mt-5 space-y-4">
+            <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
+              <p className="text-xs font-bold text-violet-700">
+                AIが参照した集計サマリー
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  ["分析範囲", activeScopeLabel],
+                  [
+                    "投稿 / 行政データ",
+                    `${activePosts.length.toLocaleString("ja-JP")}件 / ${activeVisibleSeedCount.toLocaleString("ja-JP")}件`,
+                  ],
+                  ["上位タグ", topTagSummary],
+                  ["CC BY率", `${ccByRate}%`],
+                  ["行政データとの近さ", nearestDistanceSummary],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-xl border border-white/70 bg-white px-3 py-2"
+                  >
+                    <p className="text-[11px] font-semibold text-slate-400">
+                      {label}
+                    </p>
+                    <p className="mt-1 truncate text-sm font-bold text-slate-800">
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
             {[
               ["この地域の特徴", regionalInsight.overview],
               ["市民投稿から見える魅力", regionalInsight.civicSignals],
@@ -466,6 +510,8 @@ export function DataUsePanel({
                 <p className="mt-2 text-sm leading-6 text-slate-700">{text}</p>
               </div>
             ))}
+            </div>
+
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <p className="text-sm leading-6 text-slate-600">
