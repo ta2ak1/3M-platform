@@ -23,3 +23,13 @@ export type AdminPlace = {
   lat: number;
   lng: number;
 };
+
+export type RegionalInsight = {
+  overview: string;
+  civicSignals: string;
+  adminGap: string;
+  actionHint: string;
+  caveat: string;
+  generatedAt: string;
+  source: "ai" | "fallback";
+};

@@ -1,4 +1,4 @@
-import type { AdminPlace, CommunityPost } from "../types";
+import type { AdminPlace, CommunityPost, RegionalInsight } from "../types";
 import { mockPosts } from "./mockData";
 
 const API_BASE = "/api";
@@ -134,6 +134,59 @@ export async function precheckPost(formData: FormData): Promise<{
       : [],
     requiresReview: payload.requiresReview === true,
   };
+}
+
+export async function fetchRegionalInsight(payload: {
+  scope: "visible" | "all";
+  posts: CommunityPost[];
+  adminPlaces: AdminPlace[];
+  seedCount: number;
+  visibleSeedCount: number;
+  tagRanking: { tag: string; count: number }[];
+  ccByPostCount: number;
+}): Promise<RegionalInsight> {
+  const compactPayload = {
+    ...payload,
+    posts: payload.posts.slice(0, 1000).map((post) => ({
+      id: post.id,
+      title: post.title,
+      summary: post.summary,
+      lat: post.lat,
+      lng: post.lng,
+      tags: post.tags,
+      aiTags: post.aiTags,
+      humanTags: post.humanTags,
+      contentLicense: post.contentLicense,
+    })),
+    adminPlaces: payload.adminPlaces.slice(0, 500).map((place) => ({
+      id: place.id,
+      name: place.name,
+      category: place.category,
+      city: place.city,
+      prefecture: place.prefecture,
+      lat: place.lat,
+      lng: place.lng,
+    })),
+  };
+
+  const response = await fetch(`${API_BASE}/insights/region`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(compactPayload),
+  });
+
+  const result = (await response.json().catch(() => ({}))) as {
+    insight?: RegionalInsight;
+  };
+
+  if (!response.ok || !result.insight) {
+    throw new Error("regional_insight_failed");
+  }
+
+  return result.insight;
 }
 
 export async function submitPost(formData: FormData): Promise<CommunityPost> {

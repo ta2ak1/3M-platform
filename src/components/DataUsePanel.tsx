@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchAdminPlaces, fetchPosts } from "../lib/api";
-import type { AdminPlace, CommunityPost } from "../types";
+import {
+  fetchAdminPlaces,
+  fetchPosts,
+  fetchRegionalInsight,
+} from "../lib/api";
+import type { AdminPlace, CommunityPost, RegionalInsight } from "../types";
 
 type DataUsePanelProps = {
   posts: CommunityPost[];
@@ -136,6 +140,10 @@ export function DataUsePanel({
   const [allSeedCount, setAllSeedCount] = useState<number | null>(null);
   const [isLoadingAllData, setIsLoadingAllData] = useState(false);
   const [allDataError, setAllDataError] = useState<string | null>(null);
+  const [regionalInsight, setRegionalInsight] =
+    useState<RegionalInsight | null>(null);
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  const [insightError, setInsightError] = useState<string | null>(null);
 
   useEffect(() => {
     if (
@@ -237,6 +245,40 @@ export function DataUsePanel({
   const ccByPostCount = activePosts.filter(
     (post) => post.contentLicense === "cc-by-4.0",
   ).length;
+
+  useEffect(() => {
+    setRegionalInsight(null);
+    setInsightError(null);
+  }, [
+    activeScopeLabel,
+    activePosts.length,
+    activeAdminPlaces.length,
+    tagRanking.map((item) => `${item.tag}:${item.count}`).join("|"),
+  ]);
+
+  const handleGenerateRegionalInsight = async () => {
+    setIsGeneratingInsight(true);
+    setInsightError(null);
+
+    try {
+      const insight = await fetchRegionalInsight({
+        scope: usesAllData ? "all" : "visible",
+        posts: activePosts,
+        adminPlaces: activeAdminPlaces,
+        seedCount: activeSeedCount,
+        visibleSeedCount: activeVisibleSeedCount,
+        tagRanking,
+        ccByPostCount,
+      });
+      setRegionalInsight(insight);
+    } catch {
+      setInsightError(
+        "AI地域インサイトの生成に失敗しました。少し時間を置いて再度お試しください。",
+      );
+    } finally {
+      setIsGeneratingInsight(false);
+    }
+  };
 
   const handleDownloadCsv = () => {
     downloadTextFile(
@@ -375,6 +417,71 @@ export function DataUsePanel({
             市民が見つけた魅力の切り口です。
           </p>
         </div>
+      </div>
+
+      <div className="rounded-3xl border border-violet-200 bg-white p-5 shadow-sm shadow-violet-100/70">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600">
+              AI regional insight
+            </p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              AI地域インサイト
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              {activeScopeLabel}の市民投稿・行政オープンデータ・タグ傾向をもとに、地域の特徴やギャップ、活用ヒントを短く整理します。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleGenerateRegionalInsight}
+            disabled={isGeneratingInsight || isLoadingAllData}
+            className="w-full rounded-full bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300 md:w-auto"
+          >
+            {isGeneratingInsight ? "AI分析中..." : "AIで地域を読み解く"}
+          </button>
+        </div>
+
+        {insightError ? (
+          <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {insightError}
+          </p>
+        ) : null}
+
+        {regionalInsight ? (
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {[
+              ["この地域の特徴", regionalInsight.overview],
+              ["市民投稿から見える魅力", regionalInsight.civicSignals],
+              ["行政データとのギャップ", regionalInsight.adminGap],
+              ["活用・改善のヒント", regionalInsight.actionHint],
+            ].map(([label, text]) => (
+              <div
+                key={label}
+                className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4"
+              >
+                <p className="text-xs font-bold text-violet-700">{label}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{text}</p>
+              </div>
+            ))}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <p className="text-sm leading-6 text-slate-600">
+                  {regionalInsight.caveat}
+                </p>
+                <span className="w-fit shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-500">
+                  {regionalInsight.source === "ai"
+                    ? "Workers AI生成"
+                    : "簡易インサイト"}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-4 rounded-2xl bg-violet-50 px-4 py-3 text-sm leading-6 text-violet-900">
+            デモでは、投稿が少ない状態でも「どのデータをもとに何が言えるか」をAIが慎重に整理する様子を見せられます。
+          </p>
+        )}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">

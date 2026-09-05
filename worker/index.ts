@@ -76,6 +76,16 @@ type AdminPlace = {
   lng: number;
 };
 
+type RegionalInsight = {
+  overview: string;
+  civicSignals: string;
+  adminGap: string;
+  actionHint: string;
+  caveat: string;
+  generatedAt: string;
+  source: "ai" | "fallback";
+};
+
 const seedPlaces = (() => {
   const collection = JSON.parse(seedGeojsonRaw) as GeoJsonSeedCollection;
 
@@ -1041,6 +1051,147 @@ async function runTextTagSuggestion(
   }
 }
 
+function getCommunityPostTags(post: CommunityPost): string[] {
+  return post.humanTags ?? post.tags ?? [];
+}
+
+function sanitizeInsightText(value: unknown, fallback: string, maxLength = 180) {
+  return sanitizeDraftText(value, fallback, maxLength);
+}
+
+function buildFallbackRegionalInsight(input: {
+  scope: "visible" | "all";
+  posts: CommunityPost[];
+  adminPlaces: AdminPlace[];
+  seedCount: number;
+  visibleSeedCount: number;
+  tagRanking: { tag: string; count: number }[];
+  ccByPostCount: number;
+}): RegionalInsight {
+  const scopeLabel = input.scope === "all" ? "全件データ" : "表示範囲";
+  const topTags = input.tagRanking.slice(0, 3).map((item) => `#${item.tag}`);
+  const topTagText = topTags.length > 0 ? topTags.join("、") : "タグはまだ少なめ";
+
+  return {
+    overview: `${scopeLabel}では、市民投稿${input.posts.length}件と行政オープンデータ${input.visibleSeedCount}件を比較できます。`,
+    civicSignals:
+      input.posts.length > 0
+        ? `市民投稿では${topTagText}などの切り口が見えています。投稿数が増えるほど、地域の体験価値の傾向を読み取りやすくなります。`
+        : "現時点では市民投稿が少ないため、地域の実感値を読み解くには追加投稿が必要です。",
+    adminGap:
+      input.adminPlaces.length > 0 && input.posts.length > 0
+        ? "行政データと市民投稿を重ねることで、制度上の資源と市民が魅力を感じる場所の重なりや空白を確認できます。"
+        : "行政データまたは市民投稿が不足しているため、ギャップ分析は限定的です。",
+    actionHint:
+      input.posts.length > 0
+        ? "上位タグ周辺の投稿を増やし、CSV/GeoJSONで二次利用すると、観光・まち歩き・施策検討の素材になります。"
+        : "まずは写真付き投稿を数件集め、タグと位置のばらつきを確認すると分析の出発点になります。",
+    caveat: `このインサイトは${scopeLabel}の集計に基づく参考情報です。施策判断には現地確認や追加調査を組み合わせてください。`,
+    generatedAt: new Date().toISOString(),
+    source: "fallback",
+  };
+}
+
+async function runRegionalInsight(
+  env: CloudflareEnv,
+  input: {
+    scope: "visible" | "all";
+    posts: CommunityPost[];
+    adminPlaces: AdminPlace[];
+    seedCount: number;
+    visibleSeedCount: number;
+    tagRanking: { tag: string; count: number }[];
+    ccByPostCount: number;
+  },
+): Promise<RegionalInsight> {
+  const fallback = buildFallbackRegionalInsight(input);
+
+  try {
+    const representativePosts = input.posts.slice(0, 8).map((post) => ({
+      title: post.title,
+      summary: post.summary,
+      tags: getCommunityPostTags(post).slice(0, 6),
+      lat: Number(post.lat.toFixed(5)),
+      lng: Number(post.lng.toFixed(5)),
+      contentLicense: post.contentLicense ?? "all-rights-reserved",
+    }));
+    const representativeAdminPlaces = input.adminPlaces
+      .slice(0, 12)
+      .map((place) => ({
+        name: place.name,
+        category: place.category,
+        lat: Number(place.lat.toFixed(5)),
+        lng: Number(place.lng.toFixed(5)),
+      }));
+
+    await ensureVisionModelAccepted(env);
+
+    const response = await runVisionModel(env, {
+      messages: [
+        {
+          role: "system",
+          content:
+            "あなたは自治体・地域団体向けに、市民投稿データと行政オープンデータの関係を慎重に読み解く分析者です。断定しすぎず、示唆・候補として短く整理してください。JSONだけで返してください。",
+        },
+        {
+          role: "user",
+          content: `
+            次の集計データから、地域インサイトを日本語で作成してください。
+            目的は「行政データと市民投稿のギャップや活用ヒント」をデモで分かりやすく示すことです。
+
+            制約:
+            - 各項目は80〜140字程度
+            - 断定せず「示唆されます」「候補です」など慎重な表現にする
+            - 投稿数が少ない場合は、その限界を明記する
+            - 出力は必ずJSONのみ
+
+            出力形式:
+            {
+              "overview": "この地域の特徴",
+              "civicSignals": "市民投稿から見える魅力",
+              "adminGap": "行政データとのギャップ",
+              "actionHint": "活用・改善のヒント",
+              "caveat": "注意書き"
+            }
+
+            集計範囲: ${input.scope === "all" ? "全件データ" : "表示範囲"}
+            市民投稿数: ${input.posts.length}
+            行政オープンデータ件数: ${input.visibleSeedCount}
+            行政オープンデータ総数: ${input.seedCount}
+            CC BY 4.0投稿数: ${input.ccByPostCount}
+            上位タグ: ${JSON.stringify(input.tagRanking.slice(0, 8))}
+            代表的な市民投稿: ${JSON.stringify(representativePosts)}
+            代表的な行政データ: ${JSON.stringify(representativeAdminPlaces)}
+          `,
+        },
+      ],
+    });
+
+    const parsed = normalizeJsonResponse(response);
+
+    return {
+      overview: sanitizeInsightText(parsed.overview, fallback.overview),
+      civicSignals: sanitizeInsightText(
+        parsed.civicSignals ?? parsed.civic_signals,
+        fallback.civicSignals,
+      ),
+      adminGap: sanitizeInsightText(
+        parsed.adminGap ?? parsed.admin_gap,
+        fallback.adminGap,
+      ),
+      actionHint: sanitizeInsightText(
+        parsed.actionHint ?? parsed.action_hint,
+        fallback.actionHint,
+      ),
+      caveat: sanitizeInsightText(parsed.caveat, fallback.caveat),
+      generatedAt: new Date().toISOString(),
+      source: "ai",
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 const app = new Hono<AppEnv>();
 
 app.get("/uploads/*", async (c) => {
@@ -1097,6 +1248,93 @@ app.get("/api/posts", async (c) => {
   }
 
   return c.json({ posts: getStoredPosts() });
+});
+
+app.post("/api/insights/region", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as {
+    scope?: string;
+    posts?: CommunityPost[];
+    adminPlaces?: AdminPlace[];
+    seedCount?: number;
+    visibleSeedCount?: number;
+    tagRanking?: { tag: string; count: number }[];
+    ccByPostCount?: number;
+  };
+
+  const posts = Array.isArray(body.posts)
+    ? body.posts.slice(0, 1000).flatMap((post) => {
+        const lat = Number(post.lat);
+        const lng = Number(post.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          return [];
+        }
+
+        return [
+          {
+            ...post,
+            title: sanitizeDraftText(post.title, "無題の投稿", 60),
+            summary: sanitizeDraftText(post.summary, "", 200),
+            lat,
+            lng,
+            tags: sanitizeTags(getCommunityPostTags(post)),
+            humanTags: sanitizeTags(post.humanTags ?? post.tags ?? []),
+            aiTags: sanitizeTags(post.aiTags ?? []),
+          },
+        ];
+      })
+    : [];
+
+  const adminPlaces = Array.isArray(body.adminPlaces)
+    ? body.adminPlaces.slice(0, 10000).flatMap((place) => {
+        const lat = Number(place.lat);
+        const lng = Number(place.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          return [];
+        }
+
+        return [
+          {
+            ...place,
+            name: sanitizeDraftText(place.name, "行政データ", 80),
+            category: sanitizeDraftText(place.category, "行政データ", 40),
+            city: sanitizeDraftText(place.city, "東京都", 40),
+            prefecture: sanitizeDraftText(place.prefecture, "東京都", 40),
+            lat,
+            lng,
+          },
+        ];
+      })
+    : [];
+
+  const insight = await runRegionalInsight(c.env, {
+    scope: body.scope === "all" ? "all" : "visible",
+    posts,
+    adminPlaces,
+    seedCount: Number.isFinite(body.seedCount) ? Number(body.seedCount) : 0,
+    visibleSeedCount: Number.isFinite(body.visibleSeedCount)
+      ? Number(body.visibleSeedCount)
+      : adminPlaces.length,
+    tagRanking: Array.isArray(body.tagRanking)
+      ? body.tagRanking.slice(0, 8).flatMap((item) => {
+          const count = Number(item.count);
+          if (!item.tag || !Number.isFinite(count)) {
+            return [];
+          }
+
+          return [
+            {
+              tag: sanitizeDraftText(item.tag, "", 20),
+              count,
+            },
+          ];
+        })
+      : [],
+    ccByPostCount: Number.isFinite(body.ccByPostCount)
+      ? Number(body.ccByPostCount)
+      : 0,
+  });
+
+  return c.json({ ok: true, insight });
 });
 
 app.post("/api/posts/precheck", async (c) => {
