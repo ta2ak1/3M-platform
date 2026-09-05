@@ -245,6 +245,7 @@ export function DataUsePanel({
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [insightError, setInsightError] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [showDataUseReport, setShowDataUseReport] = useState(false);
 
   useEffect(() => {
     if (
@@ -519,6 +520,9 @@ export function DataUsePanel({
       : dataReadinessScore >= 50
         ? "育成中"
         : "収集中";
+  const selectedUseCaseStory =
+    useCaseStories.find((story) => story.value === insightLens) ??
+    useCaseStories[0];
   const collectionCampaignSuggestions = useMemo<CollectionCampaignSuggestion[]>(
     () => {
       const suggestions: CollectionCampaignSuggestion[] = [];
@@ -753,6 +757,84 @@ export function DataUsePanel({
     }
   };
 
+  const buildDataUseReport = () => {
+    const lensLabel =
+      insightLensOptions.find((option) => option.value === insightLens)
+        ?.label ?? "自治体施策";
+
+    return [
+      "# 3M Platform データ活用レポート",
+      "",
+      "## 1. 利用シーン",
+      `- 想定利用者: ${selectedUseCaseStory.eyebrow}`,
+      `- 目的: ${selectedUseCaseStory.title}`,
+      `- 使い方: ${selectedUseCaseStory.scenario}`,
+      `- 次の一手: ${selectedUseCaseStory.nextStep}`,
+      "",
+      "## 2. 集計サマリー",
+      `- 分析範囲: ${activeScopeLabel}`,
+      `- 分析視点: ${lensLabel}`,
+      `- 市民投稿: ${activePosts.length.toLocaleString("ja-JP")}件`,
+      `- 行政オープンデータ: ${activeVisibleSeedCount.toLocaleString("ja-JP")}件`,
+      `- 上位タグ: ${topTagSummary}`,
+      `- 都市体験タグ: ${urbanExperienceTagCount}種 / ${urbanExperienceTaggedPostCount}投稿`,
+      `- CC BY率: ${ccByRate}%`,
+      `- データ充実度: ${dataReadinessScore}%（${dataReadinessLabel}）`,
+      "",
+      "## 3. 地域から見えること",
+      regionalInsight
+        ? regionalInsight.overview
+        : `${activeScopeLabel}では、市民投稿と行政オープンデータを重ねて、地域の魅力・関心・空白を確認できます。AI地域インサイトを生成すると、より具体的な自然文レポートにできます。`,
+      "",
+      "## 4. 主要な発見",
+      regionalInsight
+        ? buildMarkdownList(regionalInsight.findings)
+        : buildMarkdownList([
+            `市民投稿は${activePosts.length.toLocaleString("ja-JP")}件、行政オープンデータは${activeVisibleSeedCount.toLocaleString("ja-JP")}件あります。`,
+            `上位タグは${topTagSummary}です。`,
+            `ギャップ候補は${(adminGapCount + civicDiscoveryCount).toLocaleString("ja-JP")}件あります。`,
+          ]),
+      "",
+      "## 5. 行政データと市民投稿のギャップ",
+      regionalInsight
+        ? regionalInsight.adminGap
+        : gapCandidates.length > 0
+          ? "行政データと市民投稿の近接関係が薄い場所があります。追加投稿や現地確認の候補として扱えます。"
+          : "現時点では目立つギャップ候補は多くありません。投稿が増えると比較しやすくなります。",
+      "",
+      "## 6. 次に集めたい投稿",
+      collectionCampaignSuggestions
+        .map(
+          (suggestion) =>
+            `- ${suggestion.title}（優先度: ${suggestion.priority}）: ${suggestion.ask}`,
+        )
+        .join("\n"),
+      "",
+      "## 7. 活用アイデア",
+      buildMarkdownList([
+        selectedUseCaseStory.nextStep,
+        "CSV/GeoJSONを出力して、地域マップや会議資料に再利用する。",
+        "投稿キャンペーン候補を使い、次回の市民参加テーマを決める。",
+      ]),
+      "",
+      "## 8. 注意",
+      regionalInsight
+        ? regionalInsight.caveat
+        : "このレポートは現在の集計値に基づく参考情報です。施策判断には現地確認や追加調査を組み合わせてください。",
+    ].join("\n");
+  };
+
+  const handleCopyDataUseReport = async () => {
+    try {
+      await navigator.clipboard.writeText(buildDataUseReport());
+      setCopyMessage("データ活用レポートをコピーしました。");
+    } catch {
+      setCopyMessage(
+        "コピーできませんでした。ブラウザの権限設定を確認してください。",
+      );
+    }
+  };
+
   const handleDownloadCsv = () => {
     downloadTextFile(
       "3m-community-posts.csv",
@@ -768,6 +850,8 @@ export function DataUsePanel({
       "application/geo+json;charset=utf-8",
     );
   };
+
+  const dataUseReport = buildDataUseReport();
 
   return (
     <section className="space-y-5">
@@ -1317,6 +1401,83 @@ export function DataUsePanel({
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="rounded-3xl border border-teal-200 bg-white p-5 shadow-sm shadow-teal-100/70">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">
+              One page report
+            </p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              データ活用レポートを作成
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              利用者視点、集計サマリー、地域の発見、ギャップ、次に集めたい投稿、活用アイデアを1枚のレポートにまとめます。
+              AI地域インサイトを生成済みの場合は、その分析結果も反映します。
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
+            <button
+              type="button"
+              onClick={() => setShowDataUseReport((current) => !current)}
+              className="w-full rounded-full bg-teal-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700 md:w-auto"
+            >
+              {showDataUseReport ? "レポートを閉じる" : "レポートを表示"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCopyDataUseReport}
+              className="w-full rounded-full border border-teal-200 bg-white px-4 py-2 text-sm font-bold text-teal-700 transition hover:bg-teal-50 md:w-auto"
+            >
+              レポートをコピー
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          {[
+            ["利用シーン", selectedUseCaseStory.eyebrow],
+            ["分析範囲", activeScopeLabel],
+            ["データ充実度", `${dataReadinessScore}%（${dataReadinessLabel}）`],
+            [
+              "AI反映",
+              regionalInsight
+                ? regionalInsight.source === "ai"
+                  ? "Workers AI分析済み"
+                  : "簡易インサイト反映"
+                : "未生成",
+            ],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4"
+            >
+              <p className="text-xs font-bold text-teal-700">{label}</p>
+              <p className="mt-2 text-sm font-bold text-slate-900">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {showDataUseReport ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-950 p-4 text-slate-100">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-200">
+                Report preview
+              </p>
+              <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-slate-200">
+                Markdown
+              </span>
+            </div>
+            <pre className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-6">
+              {dataUseReport}
+            </pre>
+          </div>
+        ) : (
+          <p className="mt-4 rounded-2xl bg-teal-50 px-4 py-3 text-sm leading-6 text-teal-900">
+            デモでは、投稿・行政データ・AI分析が「会議や地域活動に持ち帰れるレポート」へ変わるところを見せられます。
+          </p>
+        )}
       </div>
 
       <div className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm shadow-amber-100/70">
