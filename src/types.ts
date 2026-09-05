@@ -29,6 +29,8 @@ export type RegionalInsight = {
   civicSignals: string;
   adminGap: string;
   actionHint: string;
+  collectionTheme: string;
+  dataQualityNote: string;
   caveat: string;
   generatedAt: string;
   source: "ai" | "fallback";

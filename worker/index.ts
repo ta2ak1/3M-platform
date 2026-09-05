@@ -81,6 +81,8 @@ type RegionalInsight = {
   civicSignals: string;
   adminGap: string;
   actionHint: string;
+  collectionTheme: string;
+  dataQualityNote: string;
   caveat: string;
   generatedAt: string;
   source: "ai" | "fallback";
@@ -1086,6 +1088,14 @@ function buildFallbackRegionalInsight(input: {
       input.posts.length > 0
         ? "上位タグ周辺の投稿を増やし、CSV/GeoJSONで二次利用すると、観光・まち歩き・施策検討の素材になります。"
         : "まずは写真付き投稿を数件集め、タグと位置のばらつきを確認すると分析の出発点になります。",
+    collectionTheme:
+      input.posts.length > 0
+        ? `${topTagText}に近い観点で、まだ投稿が少ない周辺エリアの写真や一言コメントを集めると比較しやすくなります。`
+        : "まずは駅前、公園、歩道、休憩できる場所など、日常的に使われる場所の投稿を集めるのがおすすめです。",
+    dataQualityNote:
+      input.posts.length > 0
+        ? `再利用可能な投稿は${input.ccByPostCount}件です。位置、タグ、ライセンス同意がそろうほど、外部利用しやすいデータになります。`
+        : "投稿数が少ないため、傾向分析よりもデータ収集フェーズとして扱うのが適切です。",
     caveat: `このインサイトは${scopeLabel}の集計に基づく参考情報です。施策判断には現地確認や追加調査を組み合わせてください。`,
     generatedAt: new Date().toISOString(),
     source: "fallback",
@@ -1151,6 +1161,8 @@ async function runRegionalInsight(
               "civicSignals": "市民投稿から見える魅力",
               "adminGap": "行政データとのギャップ",
               "actionHint": "活用・改善のヒント",
+              "collectionTheme": "次に集めたい投稿テーマ",
+              "dataQualityNote": "データ品質・再利用性のメモ",
               "caveat": "注意書き"
             }
 
@@ -1182,6 +1194,14 @@ async function runRegionalInsight(
       actionHint: sanitizeInsightText(
         parsed.actionHint ?? parsed.action_hint,
         fallback.actionHint,
+      ),
+      collectionTheme: sanitizeInsightText(
+        parsed.collectionTheme ?? parsed.collection_theme,
+        fallback.collectionTheme,
+      ),
+      dataQualityNote: sanitizeInsightText(
+        parsed.dataQualityNote ?? parsed.data_quality_note,
+        fallback.dataQualityNote,
       ),
       caveat: sanitizeInsightText(parsed.caveat, fallback.caveat),
       generatedAt: new Date().toISOString(),

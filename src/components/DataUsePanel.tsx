@@ -455,6 +455,8 @@ export function DataUsePanel({
               ["市民投稿から見える魅力", regionalInsight.civicSignals],
               ["行政データとのギャップ", regionalInsight.adminGap],
               ["活用・改善のヒント", regionalInsight.actionHint],
+              ["次に集めたい投稿テーマ", regionalInsight.collectionTheme],
+              ["データ品質・再利用性メモ", regionalInsight.dataQualityNote],
             ].map(([label, text]) => (
               <div
                 key={label}
