@@ -271,6 +271,8 @@ export function PostForm({
     precheckFormData.set("mode", postMode);
     precheckFormData.set("title", title.trim());
     precheckFormData.set("comment", summary.trim());
+    precheckFormData.set("lat", String(defaultLocation?.lat ?? 35.681236));
+    precheckFormData.set("lng", String(defaultLocation?.lng ?? 139.767125));
     if (postMode === "photo" && photoFile) {
       precheckFormData.set("photo", await createAiSafePhoto(photoFile));
     }

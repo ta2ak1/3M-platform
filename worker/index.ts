@@ -151,6 +151,27 @@ function getStoredPosts(): CommunityPost[] {
   return [...(inMemoryStore.__community_posts__ ?? [])];
 }
 
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function getDistanceMeters(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+) {
+  const earthRadiusMeters = 6371000;
+  const dLat = toRadians(b.lat - a.lat);
+  const dLng = toRadians(b.lng - a.lng);
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+
+  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(h));
+}
+
 type BboxParams = {
   minLat: number;
   maxLat: number;
@@ -1073,6 +1094,76 @@ function getCommunityPostTags(post: CommunityPost): string[] {
   return post.humanTags ?? post.tags ?? [];
 }
 
+async function findSimilarPostWarnings(
+  env: CloudflareEnv,
+  location: { lat: number; lng: number },
+  tags: string[],
+): Promise<string[]> {
+  const bboxMargin = 0.003;
+  const nearbyPosts = env.DB
+    ? await readPostsFromD1(
+        env.DB,
+        {
+          minLat: location.lat - bboxMargin,
+          maxLat: location.lat + bboxMargin,
+          minLng: location.lng - bboxMargin,
+          maxLng: location.lng + bboxMargin,
+        },
+        20,
+      )
+    : getStoredPosts();
+  const normalizedTags = new Set(tags.map((tag) => tag.trim()).filter(Boolean));
+
+  const candidates = nearbyPosts
+    .map((post) => {
+      const distanceMeters = getDistanceMeters(location, post);
+      const postTags = getCommunityPostTags(post);
+      const matchedTags = postTags.filter((tag) => normalizedTags.has(tag));
+      const similarityScore =
+        distanceMeters <= 30
+          ? 3
+          : distanceMeters <= 80
+            ? 2
+            : distanceMeters <= 150
+              ? 1
+              : 0;
+
+      return {
+        post,
+        distanceMeters,
+        matchedTags,
+        score: similarityScore + matchedTags.length,
+      };
+    })
+    .filter(
+      (candidate) =>
+        candidate.distanceMeters <= 150 &&
+        (candidate.distanceMeters <= 50 || candidate.matchedTags.length > 0),
+    )
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.distanceMeters - b.distanceMeters ||
+        a.post.title.localeCompare(b.post.title, "ja"),
+    )
+    .slice(0, 3);
+
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  return [
+    `近い場所に似た投稿候補が${candidates.length}件あります。重複ではなく別の発見として公開できるか確認してください。`,
+    ...candidates.map((candidate) => {
+      const tagText =
+        candidate.matchedTags.length > 0
+          ? ` / 共通タグ: ${candidate.matchedTags.join("、")}`
+          : "";
+      return `類似候補: ${candidate.post.title}（約${Math.round(candidate.distanceMeters)}m${tagText}）`;
+    }),
+  ];
+}
+
 function sanitizeInsightText(value: unknown, fallback: string, maxLength = 180) {
   return sanitizeDraftText(value, fallback, maxLength);
 }
@@ -1402,6 +1493,12 @@ app.post("/api/posts/precheck", async (c) => {
   const photo = formData.get("photo");
   const title = String(formData.get("title") ?? "").trim();
   const comment = String(formData.get("comment") ?? "").trim();
+  const lat = Number(formData.get("lat") ?? 35.681236);
+  const lng = Number(formData.get("lng") ?? 139.767125);
+  const location =
+    Number.isFinite(lat) && Number.isFinite(lng)
+      ? { lat, lng }
+      : { lat: 35.681236, lng: 139.767125 };
 
   if (mode === "text") {
     if (!title || !comment) {
@@ -1416,14 +1513,19 @@ app.post("/api/posts/precheck", async (c) => {
     }
 
     const tags = await runTextTagSuggestion(c.env, title, comment);
+    const similarWarnings = await findSimilarPostWarnings(
+      c.env,
+      location,
+      tags,
+    );
     return c.json({
       ok: true,
       safe: true,
       title,
       summary: comment,
       tags,
-      warnings: [],
-      requiresReview: false,
+      warnings: similarWarnings,
+      requiresReview: similarWarnings.length > 0,
     });
   }
 
@@ -1472,6 +1574,7 @@ app.post("/api/posts/precheck", async (c) => {
           title || draft.title,
           comment || draft.summary,
         );
+  const similarWarnings = await findSimilarPostWarnings(c.env, location, tags);
   const warnings = [
     ...(moderation.requiresReview
       ? [
@@ -1491,6 +1594,7 @@ app.post("/api/posts/precheck", async (c) => {
             "AI 判定サービスが一時的に不安定です。内容を確認して投稿してください。",
         ]
       : []),
+    ...similarWarnings,
   ];
 
   return c.json({
@@ -1501,7 +1605,9 @@ app.post("/api/posts/precheck", async (c) => {
     tags,
     warnings,
     requiresReview:
-      moderation.requiresReview === true || moderation.serviceError === true,
+      moderation.requiresReview === true ||
+      moderation.serviceError === true ||
+      similarWarnings.length > 0,
   });
 });
 
