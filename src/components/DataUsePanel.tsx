@@ -62,6 +62,47 @@ const insightLensOptions: {
   },
 ];
 
+const useCaseStories: {
+  value: InsightLens;
+  eyebrow: string;
+  title: string;
+  scenario: string;
+  outputs: string[];
+  nextStep: string;
+  tone: string;
+}[] = [
+  {
+    value: "policy",
+    eyebrow: "自治体・まちづくり",
+    title: "市民の実感と行政データの空白を探す",
+    scenario:
+      "公園・緑地・歩行空間などの行政オープンデータに、市民が見つけた魅力や困りごとを重ねて、追加調査や施策検討の入口にします。",
+    outputs: ["ギャップ候補", "データ充実度", "施策検討メモ"],
+    nextStep: "ギャップ候補を現地確認リストにする",
+    tone: "border-emerald-200 bg-emerald-50/70 text-emerald-800",
+  },
+  {
+    value: "tourism",
+    eyebrow: "観光・地域PR",
+    title: "まち歩きで紹介しやすい地域資源を見つける",
+    scenario:
+      "写真付き投稿や都市体験タグから、回遊ルート、休憩スポット、季節感のある場所など、地域PRに使える素材を整理します。",
+    outputs: ["人気タグ", "近接スポット", "PR素材候補"],
+    nextStep: "CSV/GeoJSONを地域紹介マップに使う",
+    tone: "border-orange-200 bg-orange-50/70 text-orange-800",
+  },
+  {
+    value: "community",
+    eyebrow: "市民活動・地域団体",
+    title: "次に集める声と投稿テーマを決める",
+    scenario:
+      "投稿が多いテーマ・少ないテーマを見ながら、地域イベントやワークショップで呼びかける投稿テーマを具体化します。",
+    outputs: ["収集テーマ", "不足データ", "参加の呼びかけ"],
+    nextStep: "次回の投稿キャンペーンのテーマにする",
+    tone: "border-sky-200 bg-sky-50/70 text-sky-800",
+  },
+];
+
 const ALL_DATA_LIMIT = 10000;
 const ALL_POST_LIMIT = 1000;
 
@@ -690,6 +731,67 @@ export function DataUsePanel({
               {allDataError}
             </p>
           ) : null}
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              Use case stories
+            </p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              このデータを誰がどう使うか
+            </h3>
+          </div>
+          <p className="max-w-2xl text-sm leading-6 text-slate-600">
+            活用する人の視点を選ぶと、AI地域インサイトの分析視点も切り替わります。
+            データ収集から意思決定・発信・参加促進までの流れをデモで説明しやすくします。
+          </p>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          {useCaseStories.map((story) => {
+            const isActive = insightLens === story.value;
+
+            return (
+              <button
+                key={story.value}
+                type="button"
+                onClick={() => setInsightLens(story.value)}
+                className={`rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
+                  isActive
+                    ? `${story.tone} ring-2 ring-primary/20`
+                    : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-white"
+                }`}
+              >
+                <p className="text-xs font-bold uppercase tracking-[0.16em] opacity-80">
+                  {story.eyebrow}
+                </p>
+                <h4 className="mt-2 text-base font-bold text-slate-900">
+                  {story.title}
+                </h4>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {story.scenario}
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {story.outputs.map((output) => (
+                    <span
+                      key={output}
+                      className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-bold text-slate-700"
+                    >
+                      {output}
+                    </span>
+                  ))}
+                </div>
+
+                <p className="mt-4 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-slate-700">
+                  次の一手: {story.nextStep}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </div>
 
