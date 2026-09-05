@@ -7,6 +7,7 @@ import {
 import {
   isUrbanExperienceTag,
   splitUrbanExperienceTags,
+  urbanExperienceTags,
 } from "../lib/urbanExperienceTags";
 import type { AdminPlace, CommunityPost, RegionalInsight } from "../types";
 
@@ -39,6 +40,16 @@ type GapCandidate =
 
 type InsightScope = "visible" | "all";
 type InsightLens = "policy" | "tourism" | "community";
+
+type CollectionCampaignSuggestion = {
+  id: string;
+  title: string;
+  reason: string;
+  ask: string;
+  expectedUse: string;
+  priority: "高" | "中" | "育成";
+  tone: string;
+};
 
 const insightLensOptions: {
   value: InsightLens;
@@ -508,6 +519,102 @@ export function DataUsePanel({
       : dataReadinessScore >= 50
         ? "育成中"
         : "収集中";
+  const collectionCampaignSuggestions = useMemo<CollectionCampaignSuggestion[]>(
+    () => {
+      const suggestions: CollectionCampaignSuggestion[] = [];
+      const urbanTagCounts = new Map<string, number>();
+      activePosts.forEach((post) => {
+        getPostTags(post).forEach((tag) => {
+          if (isUrbanExperienceTag(tag)) {
+            urbanTagCounts.set(tag, (urbanTagCounts.get(tag) ?? 0) + 1);
+          }
+        });
+      });
+      const missingUrbanTags = urbanExperienceTags
+        .filter((tag) => !urbanTagCounts.has(tag))
+        .slice(0, 4);
+      const topGapCandidate = gapCandidates[0];
+
+      if (topGapCandidate) {
+        const isAdminGap = topGapCandidate.type === "admin_without_posts";
+        const title = isAdminGap
+          ? topGapCandidate.place.name
+          : topGapCandidate.post.title;
+        const distanceText =
+          topGapCandidate.distanceMeters == null
+            ? "比較対象がまだありません"
+            : `最寄りの相手側データまで約${Math.round(topGapCandidate.distanceMeters).toLocaleString("ja-JP")}m`;
+
+        suggestions.push({
+          id: "gap-campaign",
+          title: `${title}周辺の現地投稿を集める`,
+          reason: isAdminGap
+            ? `行政オープンデータはありますが、近い市民投稿がまだ薄い候補です。${distanceText}。`
+            : `市民投稿はありますが、対応する行政オープンデータが少ない候補です。${distanceText}。`,
+          ask: "写真、短いコメント、歩きやすさ・休憩しやすさなどの都市体験タグを添えて投稿してもらう。",
+          expectedUse:
+            "行政データと市民の実感の重なりや空白を、現地確認リストとして使えます。",
+          priority: "高",
+          tone: "border-amber-200 bg-amber-50 text-amber-800",
+        });
+      }
+
+      if (missingUrbanTags.length > 0) {
+        suggestions.push({
+          id: "urban-tags-campaign",
+          title: "未収集の都市体験タグを集める",
+          reason: `この範囲では ${missingUrbanTags.map((tag) => `#${tag}`).join("、")} などの観点がまだ薄いです。`,
+          ask: "日常の移動、休憩、安心感、案内の分かりやすさなど、体験ベースの気づきを投稿してもらう。",
+          expectedUse:
+            "地域比較やバリアフリー、観光回遊、公共空間改善の切り口が増えます。",
+          priority: activePosts.length >= 5 ? "中" : "高",
+          tone: "border-violet-200 bg-violet-50 text-violet-800",
+        });
+      }
+
+      if (activePosts.length < 5) {
+        suggestions.push({
+          id: "starter-campaign",
+          title: "まずは5件の写真付き投稿を集める",
+          reason:
+            "投稿数が少ないため、AI地域インサイトやタグ傾向を強く読むには材料が不足しています。",
+          ask: "駅前、公園、歩道、休憩できる場所など、日常的に使う場所を写真付きで投稿してもらう。",
+          expectedUse:
+            "デモや地域ワークショップで、収集から分析までの流れを説明しやすくなります。",
+          priority: "高",
+          tone: "border-sky-200 bg-sky-50 text-sky-800",
+        });
+      }
+
+      if (activePosts.length > 0 && ccByRate < 80) {
+        suggestions.push({
+          id: "license-campaign",
+          title: "再利用しやすい投稿を増やす",
+          reason: `CC BY 4.0として扱える投稿は${ccByRate}%です。外部活用には再利用条件の明確さが重要です。`,
+          ask: "投稿前に公開条件を確認してもらい、可能な範囲でCC BY 4.0を選んでもらう。",
+          expectedUse:
+            "CSV/GeoJSONを自治体、地域団体、観光PR素材として共有しやすくなります。",
+          priority: "中",
+          tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+        });
+      }
+
+      suggestions.push({
+        id: "time-diversity-campaign",
+        title: "時間帯の違いが分かる投稿を集める",
+        reason:
+          "同じ場所でも朝・昼・夕方・夜で、安心感、混雑、日陰、にぎわいの見え方が変わります。",
+        ask: "時間帯が分かるコメントを添えて、同じ地域を別の時間に投稿してもらう。",
+        expectedUse:
+          "観光回遊、夜間の安心感、暑さ対策など、時間軸を含む分析に広げられます。",
+        priority: activePosts.length >= 5 ? "中" : "育成",
+        tone: "border-slate-200 bg-slate-50 text-slate-800",
+      });
+
+      return suggestions.slice(0, 4);
+    },
+    [activePosts, ccByRate, gapCandidates],
+  );
 
   useEffect(() => {
     setRegionalInsight(null);
@@ -584,6 +691,14 @@ export function DataUsePanel({
       "",
       "## 次に集めたい投稿テーマ",
       buildMarkdownList(insight.collectionThemes),
+      "",
+      "## 投稿キャンペーン候補",
+      collectionCampaignSuggestions
+        .map(
+          (suggestion) =>
+            `- ${suggestion.title}（優先度: ${suggestion.priority}）\n  - 理由: ${suggestion.reason}\n  - 呼びかけ: ${suggestion.ask}\n  - 活用先: ${suggestion.expectedUse}`,
+        )
+        .join("\n"),
       "",
       "## この地域の特徴",
       insight.overview,
@@ -888,6 +1003,64 @@ export function DataUsePanel({
               <p className="mt-2 text-xs leading-5 text-slate-600">
                 {check.message}
               </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-emerald-200 bg-white p-5 shadow-sm shadow-emerald-100/70">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
+              Collection strategy
+            </p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              次に集める投稿テーマ
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              投稿数・都市体験タグ・行政データとのギャップ・再利用性から、次の投稿キャンペーン候補を整理します。
+              データを集めるだけでなく、何を増やすと活用しやすくなるかを示します。
+            </p>
+          </div>
+          <span className="w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+            {collectionCampaignSuggestions.length}件の候補
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {collectionCampaignSuggestions.map((suggestion) => (
+            <div
+              key={suggestion.id}
+              className={`rounded-2xl border p-4 ${suggestion.tone}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">
+                    投稿キャンペーン案
+                  </p>
+                  <h4 className="mt-1 text-base font-bold text-slate-900">
+                    {suggestion.title}
+                  </h4>
+                </div>
+                <span className="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-xs font-black text-slate-700">
+                  優先度 {suggestion.priority}
+                </span>
+              </div>
+
+              <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
+                <p>
+                  <span className="font-bold text-slate-900">理由:</span>{" "}
+                  {suggestion.reason}
+                </p>
+                <p>
+                  <span className="font-bold text-slate-900">呼びかけ:</span>{" "}
+                  {suggestion.ask}
+                </p>
+                <p>
+                  <span className="font-bold text-slate-900">活用先:</span>{" "}
+                  {suggestion.expectedUse}
+                </p>
+              </div>
             </div>
           ))}
         </div>
