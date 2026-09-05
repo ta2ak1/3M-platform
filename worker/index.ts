@@ -85,6 +85,11 @@ type RegionalInsight = {
   actionHint: string;
   collectionTheme: string;
   dataQualityNote: string;
+  findings: string[];
+  risks: string[];
+  recommendedActions: string[];
+  dataGaps: string[];
+  collectionThemes: string[];
   caveat: string;
   generatedAt: string;
   source: "ai" | "fallback";
@@ -1175,6 +1180,24 @@ function sanitizeInsightText(value: unknown, fallback: string, maxLength = 180) 
   return sanitizeDraftText(value, fallback, maxLength);
 }
 
+function sanitizeInsightList(
+  value: unknown,
+  fallback: string[],
+  maxItems = 3,
+  maxLength = 120,
+) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  const items = value
+    .map((item) => sanitizeDraftText(item, "", maxLength))
+    .filter((item) => item.length > 0)
+    .slice(0, maxItems);
+
+  return items.length > 0 ? items : fallback;
+}
+
 function buildFallbackRegionalInsight(input: {
   scope: "visible" | "all";
   lens: "policy" | "tourism" | "community";
@@ -1195,6 +1218,10 @@ function buildFallbackRegionalInsight(input: {
         : "自治体施策";
   const topTags = input.tagRanking.slice(0, 3).map((item) => `#${item.tag}`);
   const topTagText = topTags.length > 0 ? topTags.join("、") : "タグはまだ少なめ";
+  const gapText =
+    input.gapCandidates.length > 0
+      ? `行政データと市民投稿の対応が薄い候補が${input.gapCandidates.length}件あります。`
+      : "現時点では大きなギャップ候補は目立ちません。";
 
   return {
     lens: input.lens,
@@ -1221,6 +1248,39 @@ function buildFallbackRegionalInsight(input: {
       input.posts.length > 0
         ? `再利用可能な投稿は${input.ccByPostCount}件です。位置、タグ、ライセンス同意がそろうほど、外部利用しやすいデータになります。`
         : "投稿数が少ないため、傾向分析よりもデータ収集フェーズとして扱うのが適切です。",
+    findings: [
+      `${scopeLabel}では、市民投稿${input.posts.length}件と行政オープンデータ${input.visibleSeedCount}件を比較できます。`,
+      input.posts.length > 0
+        ? `市民投稿では${topTagText}などの体験タグが目立ちます。`
+        : "市民投稿が少ないため、地域の実感値はまだ十分に読めません。",
+      gapText,
+    ],
+    risks: [
+      input.posts.length < 5
+        ? "投稿数が少ないため、傾向を強く断定しない運用が必要です。"
+        : "投稿の偏りに注意し、時間帯やエリアを広げて確認する必要があります。",
+      input.ccByPostCount < input.posts.length
+        ? "再利用条件がそろっていない投稿があり、外部活用時はライセンス確認が必要です。"
+        : "公開再利用しやすい投稿が中心ですが、写真内の個人情報確認は継続が必要です。",
+    ],
+    recommendedActions: [
+      `${lensLabel}の観点で、上位タグに近い投稿を追加収集する。`,
+      "CSV/GeoJSONを使い、地図やレポートに再利用できる形で共有する。",
+      "ギャップ候補を現地確認や次回投稿キャンペーンの候補にする。",
+    ],
+    dataGaps:
+      input.gapCandidates.length > 0
+        ? input.gapCandidates
+            .slice(0, 3)
+            .map((candidate) => candidate.description)
+        : ["比較できる投稿と行政データの組み合わせを増やすと、空白地域を見つけやすくなります。"],
+    collectionThemes: [
+      input.posts.length > 0
+        ? `${topTagText}に関連する周辺エリアの投稿`
+        : "駅前、公園、歩道、休憩できる場所の投稿",
+      "写真付きで位置とタグがそろった投稿",
+      "朝・夜・休日など、時間帯の違いが分かる投稿",
+    ],
     caveat: `このインサイトは${scopeLabel}の集計に基づく参考情報です。施策判断には現地確認や追加調査を組み合わせてください。`,
     generatedAt: new Date().toISOString(),
     source: "fallback",
@@ -1297,6 +1357,11 @@ async function runRegionalInsight(
               "actionHint": "活用・改善のヒント",
               "collectionTheme": "次に集めたい投稿テーマ",
               "dataQualityNote": "データ品質・再利用性のメモ",
+              "findings": ["主要な発見1", "主要な発見2", "主要な発見3"],
+              "risks": ["解釈上の注意1", "運用上のリスク2"],
+              "recommendedActions": ["次のアクション1", "次のアクション2", "次のアクション3"],
+              "dataGaps": ["不足しているデータ1", "不足しているデータ2"],
+              "collectionThemes": ["次に集めたいテーマ1", "次に集めたいテーマ2", "次に集めたいテーマ3"],
               "caveat": "注意書き"
             }
 
@@ -1339,6 +1404,20 @@ async function runRegionalInsight(
       dataQualityNote: sanitizeInsightText(
         parsed.dataQualityNote ?? parsed.data_quality_note,
         fallback.dataQualityNote,
+      ),
+      findings: sanitizeInsightList(parsed.findings, fallback.findings),
+      risks: sanitizeInsightList(parsed.risks, fallback.risks),
+      recommendedActions: sanitizeInsightList(
+        parsed.recommendedActions ?? parsed.recommended_actions,
+        fallback.recommendedActions,
+      ),
+      dataGaps: sanitizeInsightList(
+        parsed.dataGaps ?? parsed.data_gaps,
+        fallback.dataGaps,
+      ),
+      collectionThemes: sanitizeInsightList(
+        parsed.collectionThemes ?? parsed.collection_themes,
+        fallback.collectionThemes,
       ),
       caveat: sanitizeInsightText(parsed.caveat, fallback.caveat),
       generatedAt: new Date().toISOString(),

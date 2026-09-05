@@ -32,6 +32,11 @@ export type RegionalInsight = {
   actionHint: string;
   collectionTheme: string;
   dataQualityNote: string;
+  findings: string[];
+  risks: string[];
+  recommendedActions: string[];
+  dataGaps: string[];
+  collectionThemes: string[];
   caveat: string;
   generatedAt: string;
   source: "ai" | "fallback";

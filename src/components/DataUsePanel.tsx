@@ -109,6 +109,12 @@ function downloadTextFile(filename: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+function buildMarkdownList(items: string[]) {
+  return items.length > 0
+    ? items.map((item) => `- ${item}`).join("\n")
+    : "- まだ十分な材料がありません。";
+}
+
 function buildPostsCsv(posts: CommunityPost[]) {
   const rows = [
     [
@@ -520,6 +526,24 @@ export function DataUsePanel({
       `- データ充実度: ${dataReadinessScore}%（${dataReadinessLabel}）`,
       `- 生成方式: ${insight.source === "ai" ? "Workers AI" : "簡易インサイト"}`,
       "",
+      "## 要約",
+      insight.overview,
+      "",
+      "## 主要な発見",
+      buildMarkdownList(insight.findings),
+      "",
+      "## 解釈・運用上の注意",
+      buildMarkdownList(insight.risks),
+      "",
+      "## 推奨アクション",
+      buildMarkdownList(insight.recommendedActions),
+      "",
+      "## 不足しているデータ",
+      buildMarkdownList(insight.dataGaps),
+      "",
+      "## 次に集めたい投稿テーマ",
+      buildMarkdownList(insight.collectionThemes),
+      "",
       "## この地域の特徴",
       insight.overview,
       "",
@@ -532,7 +556,7 @@ export function DataUsePanel({
       "## 活用・改善のヒント",
       insight.actionHint,
       "",
-      "## 次に集めたい投稿テーマ",
+      "## 補足: 次に集めたい投稿テーマ",
       insight.collectionTheme,
       "",
       "## データ品質・再利用性メモ",
@@ -864,10 +888,10 @@ export function DataUsePanel({
                   ],
                   ["CC BY率", `${ccByRate}%`],
                   ["行政データとの近さ", nearestDistanceSummary],
-                [
-                  "データ充実度",
-                  `${dataReadinessScore}%（${dataReadinessLabel}）`,
-                ],
+                  [
+                    "データ充実度",
+                    `${dataReadinessScore}%（${dataReadinessLabel}）`,
+                  ],
                   [
                     "ギャップ候補",
                     `${adminGapCount + civicDiscoveryCount}件`,
@@ -888,23 +912,73 @@ export function DataUsePanel({
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-            {[
-              ["この地域の特徴", regionalInsight.overview],
-              ["市民投稿から見える魅力", regionalInsight.civicSignals],
-              ["行政データとのギャップ", regionalInsight.adminGap],
-              ["活用・改善のヒント", regionalInsight.actionHint],
-              ["次に集めたい投稿テーマ", regionalInsight.collectionTheme],
-              ["データ品質・再利用性メモ", regionalInsight.dataQualityNote],
-            ].map(([label, text]) => (
-              <div
-                key={label}
-                className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4"
-              >
-                <p className="text-xs font-bold text-violet-700">{label}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-700">{text}</p>
+            <div className="rounded-2xl border border-violet-100 bg-white p-4">
+              <p className="text-xs font-bold text-violet-700">
+                AI分析レポート
+              </p>
+              <h4 className="mt-2 text-lg font-bold text-slate-900">
+                {regionalInsight.overview}
+              </h4>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {[
+                  ["主要な発見", regionalInsight.findings, "bg-violet-50"],
+                  ["解釈・運用上の注意", regionalInsight.risks, "bg-rose-50"],
+                  [
+                    "推奨アクション",
+                    regionalInsight.recommendedActions,
+                    "bg-emerald-50",
+                  ],
+                  [
+                    "不足しているデータ",
+                    regionalInsight.dataGaps,
+                    "bg-amber-50",
+                  ],
+                  [
+                    "次に集めたい投稿テーマ",
+                    regionalInsight.collectionThemes,
+                    "bg-sky-50",
+                  ],
+                ].map(([label, items, tone]) => (
+                  <div
+                    key={label as string}
+                    className={`rounded-2xl p-4 ${tone as string}`}
+                  >
+                    <p className="text-sm font-bold text-slate-900">
+                      {label as string}
+                    </p>
+                    <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+                      {(items as string[]).map((item) => (
+                        <li key={item} className="flex gap-2">
+                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              {[
+                ["この地域の特徴", regionalInsight.overview],
+                ["市民投稿から見える魅力", regionalInsight.civicSignals],
+                ["行政データとのギャップ", regionalInsight.adminGap],
+                ["活用・改善のヒント", regionalInsight.actionHint],
+                ["次に集めたい投稿テーマ", regionalInsight.collectionTheme],
+                ["データ品質・再利用性メモ", regionalInsight.dataQualityNote],
+              ].map(([label, text]) => (
+                <div
+                  key={label}
+                  className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4"
+                >
+                  <p className="text-xs font-bold text-violet-700">{label}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">
+                    {text}
+                  </p>
+                </div>
+              ))}
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
