@@ -90,6 +90,13 @@ type RegionalInsight = {
   source: "ai" | "fallback";
 };
 
+type RegionalGapCandidate = {
+  type: "admin_without_posts" | "post_without_admin";
+  title: string;
+  description: string;
+  distanceMeters?: number;
+};
+
 const seedPlaces = (() => {
   const collection = JSON.parse(seedGeojsonRaw) as GeoJsonSeedCollection;
 
@@ -1177,6 +1184,7 @@ function buildFallbackRegionalInsight(input: {
   visibleSeedCount: number;
   tagRanking: { tag: string; count: number }[];
   ccByPostCount: number;
+  gapCandidates: RegionalGapCandidate[];
 }): RegionalInsight {
   const scopeLabel = input.scope === "all" ? "全件データ" : "表示範囲";
   const lensLabel =
@@ -1196,8 +1204,10 @@ function buildFallbackRegionalInsight(input: {
         ? `市民投稿では${topTagText}などの切り口が見えています。投稿数が増えるほど、地域の体験価値の傾向を読み取りやすくなります。`
         : "現時点では市民投稿が少ないため、地域の実感値を読み解くには追加投稿が必要です。",
     adminGap:
-      input.adminPlaces.length > 0 && input.posts.length > 0
-        ? "行政データと市民投稿を重ねることで、制度上の資源と市民が魅力を感じる場所の重なりや空白を確認できます。"
+      input.gapCandidates.length > 0
+        ? `行政データと市民投稿の間に${input.gapCandidates.length}件のギャップ候補があります。追加投稿や現地確認の候補として扱えます。`
+        : input.adminPlaces.length > 0 && input.posts.length > 0
+          ? "行政データと市民投稿を重ねることで、制度上の資源と市民が魅力を感じる場所の重なりや空白を確認できます。"
         : "行政データまたは市民投稿が不足しているため、ギャップ分析は限定的です。",
     actionHint:
       input.posts.length > 0
@@ -1228,6 +1238,7 @@ async function runRegionalInsight(
     visibleSeedCount: number;
     tagRanking: { tag: string; count: number }[];
     ccByPostCount: number;
+    gapCandidates: RegionalGapCandidate[];
   },
 ): Promise<RegionalInsight> {
   const fallback = buildFallbackRegionalInsight(input);
@@ -1296,6 +1307,7 @@ async function runRegionalInsight(
             行政オープンデータ総数: ${input.seedCount}
             CC BY 4.0投稿数: ${input.ccByPostCount}
             上位タグ: ${JSON.stringify(input.tagRanking.slice(0, 8))}
+            ギャップ候補: ${JSON.stringify(input.gapCandidates.slice(0, 6))}
             代表的な市民投稿: ${JSON.stringify(representativePosts)}
             代表的な行政データ: ${JSON.stringify(representativeAdminPlaces)}
           `,
@@ -1405,6 +1417,7 @@ app.post("/api/insights/region", async (c) => {
     visibleSeedCount?: number;
     tagRanking?: { tag: string; count: number }[];
     ccByPostCount?: number;
+    gapCandidates?: RegionalGapCandidate[];
   };
 
   const posts = Array.isArray(body.posts)
@@ -1482,6 +1495,29 @@ app.post("/api/insights/region", async (c) => {
     ccByPostCount: Number.isFinite(body.ccByPostCount)
       ? Number(body.ccByPostCount)
       : 0,
+    gapCandidates: Array.isArray(body.gapCandidates)
+      ? body.gapCandidates.slice(0, 6).flatMap((candidate) => {
+          if (
+            candidate.type !== "admin_without_posts" &&
+            candidate.type !== "post_without_admin"
+          ) {
+            return [];
+          }
+
+          const distanceMeters = Number(candidate.distanceMeters);
+
+          return [
+            {
+              type: candidate.type,
+              title: sanitizeDraftText(candidate.title, "ギャップ候補", 80),
+              description: sanitizeDraftText(candidate.description, "", 140),
+              distanceMeters: Number.isFinite(distanceMeters)
+                ? Math.max(0, Math.round(distanceMeters))
+                : undefined,
+            },
+          ];
+        })
+      : [],
   });
 
   return c.json({ ok: true, insight });

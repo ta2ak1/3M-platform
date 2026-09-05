@@ -366,6 +366,20 @@ export function DataUsePanel({
   const civicDiscoveryCount = gapCandidates.filter(
     (candidate) => candidate.type === "post_without_admin",
   ).length;
+  const regionalInsightGapCandidates = gapCandidates.map((candidate) => {
+    const isAdminGap = candidate.type === "admin_without_posts";
+    const title = isAdminGap ? candidate.place.name : candidate.post.title;
+    const description = isAdminGap
+      ? `行政データ「${candidate.place.category}」はあるが、近い市民投稿が少ない候補`
+      : "市民投稿はあるが、近い行政オープンデータが少ない候補";
+
+    return {
+      type: candidate.type,
+      title,
+      description,
+      distanceMeters: candidate.distanceMeters,
+    };
+  });
 
   const ccByPostCount = activePosts.filter(
     (post) => post.contentLicense === "cc-by-4.0",
@@ -474,6 +488,7 @@ export function DataUsePanel({
         visibleSeedCount: activeVisibleSeedCount,
         tagRanking,
         ccByPostCount,
+        gapCandidates: regionalInsightGapCandidates,
       });
       setRegionalInsight(insight);
     } catch {
@@ -522,6 +537,19 @@ export function DataUsePanel({
       "",
       "## データ品質・再利用性メモ",
       insight.dataQualityNote,
+      "",
+      "## ギャップ候補",
+      regionalInsightGapCandidates.length > 0
+        ? regionalInsightGapCandidates
+            .map((candidate) => {
+              const distanceText =
+                candidate.distanceMeters == null
+                  ? "比較対象なし"
+                  : `約${Math.round(candidate.distanceMeters).toLocaleString("ja-JP")}m`;
+              return `- ${candidate.title}: ${candidate.description}（${distanceText}）`;
+            })
+            .join("\n")
+        : "目立つギャップ候補はありません。",
       "",
       "## 注意",
       insight.caveat,
@@ -749,7 +777,7 @@ export function DataUsePanel({
               AI地域インサイト
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              {activeScopeLabel}の市民投稿・行政オープンデータ・タグ傾向をもとに、地域の特徴やギャップ、活用ヒントを短く整理します。
+              {activeScopeLabel}の市民投稿・行政オープンデータ・タグ傾向・ギャップ候補をもとに、地域の特徴や活用ヒントを短く整理します。
             </p>
           </div>
           <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">

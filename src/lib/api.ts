@@ -145,6 +145,12 @@ export async function fetchRegionalInsight(payload: {
   visibleSeedCount: number;
   tagRanking: { tag: string; count: number }[];
   ccByPostCount: number;
+  gapCandidates?: {
+    type: "admin_without_posts" | "post_without_admin";
+    title: string;
+    description: string;
+    distanceMeters?: number;
+  }[];
 }): Promise<RegionalInsight> {
   const compactPayload = {
     ...payload,
@@ -168,6 +174,7 @@ export async function fetchRegionalInsight(payload: {
       lat: place.lat,
       lng: place.lng,
     })),
+    gapCandidates: payload.gapCandidates?.slice(0, 6),
   };
 
   const response = await fetch(`${API_BASE}/insights/region`, {
