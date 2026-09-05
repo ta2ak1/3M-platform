@@ -927,6 +927,49 @@ export function DataUsePanel({
         )}
       </div>
 
+      <div className="rounded-3xl border border-indigo-200 bg-white p-5 shadow-sm shadow-indigo-100/70">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
+          AI operations
+        </p>
+        <h3 className="mt-1 text-lg font-bold text-slate-900">
+          AI活用の運用設計
+        </h3>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+          公共性のある市民投稿データとして扱えるよう、AIの自動判断だけに寄せず、監査・失敗時の継続・人の確認を前提にしています。
+        </p>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          {[
+            [
+              "Workers AI",
+              "画像確認、タグ候補、地域インサイト生成をWorker内で実行します。",
+            ],
+            [
+              "AI Gateway対応",
+              "環境変数を設定すると、AI呼び出しをGateway経由にできます。",
+            ],
+            [
+              "フォールバック",
+              "AI地域インサイトが失敗しても、簡易インサイトで画面を継続します。",
+            ],
+            [
+              "人の確認",
+              "公開可否や最終タグは、AI候補を見た投稿者が判断します。",
+            ],
+          ].map(([label, description]) => (
+            <div
+              key={label}
+              className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"
+            >
+              <p className="text-sm font-bold text-indigo-800">{label}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-600">
+                {description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm shadow-amber-100/70">
         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
           <div>
