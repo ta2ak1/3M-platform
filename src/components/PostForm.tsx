@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import exifr from "exifr";
 import { precheckPost } from "../lib/api";
+import { isTurnstileEnabled } from "../lib/turnstile";
 import { isUrbanExperienceTag } from "../lib/urbanExperienceTags";
-import {
-  isTurnstileEnabled,
-  TurnstileWidget,
-} from "./TurnstileWidget";
+import { TurnstileWidget } from "./TurnstileWidget";
 
 type LocationSource = "exif" | "device" | "manual" | "fallback";
 type PostMode = "photo" | "text";

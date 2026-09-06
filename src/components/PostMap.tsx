@@ -72,6 +72,9 @@ export function PostMap({
   const currentLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const draftLocationLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const initialCenterRef = useRef(initialCenter);
+  const onLocationPickRef = useRef(onLocationPick);
+  const onBoundsChangeRef = useRef(onBoundsChange);
   const lastMapSizeRef = useRef("");
   // fitBounds による moveend で再取得ループを防ぐ
   const suppressMoveendRef = useRef(false);
@@ -80,6 +83,15 @@ export function PostMap({
   const hasUserMovedMapRef = useRef(false);
   const hasAppliedInitialCenterRef = useRef("");
   const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    initialCenterRef.current = initialCenter;
+  }, [initialCenter]);
+
+  useEffect(() => {
+    onLocationPickRef.current = onLocationPick;
+    onBoundsChangeRef.current = onBoundsChange;
+  }, [onBoundsChange, onLocationPick]);
 
   // リサイズ監視処理
   useEffect(() => {
@@ -134,10 +146,11 @@ export function PostMap({
         return;
       }
 
+      const initial = initialCenterRef.current;
       const map = L.map(container, {
         zoomControl: true,
-      }).setView([initialCenter.lat, initialCenter.lng], 14);
-      hasAppliedInitialCenterRef.current = `${initialCenter.lat},${initialCenter.lng}`;
+      }).setView([initial.lat, initial.lng], 14);
+      hasAppliedInitialCenterRef.current = `${initial.lat},${initial.lng}`;
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
@@ -153,7 +166,7 @@ export function PostMap({
 
       map.on("click", (event: Leaflet.LeafletMouseEvent) => {
         const { lat, lng } = event.latlng;
-        onLocationPick?.({ lat, lng });
+        onLocationPickRef.current?.({ lat, lng });
       });
 
       map.on("dragstart zoomstart", () => {
@@ -163,7 +176,7 @@ export function PostMap({
       let boundsTimer: ReturnType<typeof setTimeout> | null = null;
       const emitBounds = () => {
         const b = map.getBounds();
-        onBoundsChange?.({
+        onBoundsChangeRef.current?.({
           minLat: b.getSouth(),
           maxLat: b.getNorth(),
           minLng: b.getWest(),
@@ -197,7 +210,7 @@ export function PostMap({
       draftLocationLayerRef.current = null;
       markerMapRef.current.clear();
     };
-  }, [onLocationPick]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -216,14 +229,14 @@ export function PostMap({
     map.once("moveend", () => {
       suppressMoveendRef.current = false;
       const b = map.getBounds();
-      onBoundsChange?.({
+      onBoundsChangeRef.current?.({
         minLat: b.getSouth(),
         maxLat: b.getNorth(),
         minLng: b.getWest(),
         maxLng: b.getEast(),
       });
     });
-  }, [initialCenter.lat, initialCenter.lng, isReady, onBoundsChange]);
+  }, [initialCenter.lat, initialCenter.lng, isReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -265,7 +278,7 @@ export function PostMap({
         opacity: 0.92,
       })
       .addTo(layer);
-  }, [draftLocation?.lat, draftLocation?.lng, isReady]);
+  }, [draftLocation, isReady]);
 
   const normalizedPosts = useMemo(
     () =>

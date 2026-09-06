@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { turnstileSiteKey } from "../lib/turnstile";
 
 type TurnstileInstance = {
   render: (
@@ -19,12 +20,6 @@ declare global {
   interface Window {
     turnstile?: TurnstileInstance;
   }
-}
-
-const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-
-export function isTurnstileEnabled() {
-  return Boolean(turnstileSiteKey);
 }
 
 type TurnstileWidgetProps = {

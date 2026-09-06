@@ -36,6 +36,7 @@ function useMap({
   onLocationPick,
 }: useMapProps) {
   const mapRef = useRef<Leaflet.Map | null>(null);
+  const onLocationPickRef = useRef(onLocationPick);
   // const markerLayerRef = useRef<Leaflet.LayerGroup | null>(null);
   // const markerMapRef = useRef<Map<string, Leaflet.Marker>>(new Map());
   const mapElementRef = useRef<HTMLDivElement | null>(null);
@@ -47,6 +48,10 @@ function useMap({
   //     ),
   //   [posts],
   // );
+
+  useEffect(() => {
+    onLocationPickRef.current = onLocationPick;
+  }, [onLocationPick]);
 
   // リサイズ監視処理
   useEffect(() => {
@@ -99,7 +104,7 @@ function useMap({
 
       map.on("click", (event: Leaflet.LeafletMouseEvent) => {
         const { lat, lng } = event.latlng;
-        onLocationPick?.({ lat, lng });
+        onLocationPickRef.current?.({ lat, lng });
       });
     })();
 
