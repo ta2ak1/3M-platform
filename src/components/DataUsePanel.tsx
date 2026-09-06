@@ -43,6 +43,7 @@ type GapCandidate =
     };
 
 type InsightLens = "policy" | "tourism" | "community";
+type DataUseMode = "explore" | "analyze";
 
 type CollectionCampaignSuggestion = {
   id: string;
@@ -181,6 +182,10 @@ function formatLogDate(value: string) {
   }).format(date);
 }
 
+function normalizeSearchText(value: string) {
+  return value.trim().toLocaleLowerCase("ja-JP");
+}
+
 function buildPostsCsv(posts: CommunityPost[]) {
   const rows = [
     [
@@ -245,6 +250,8 @@ export function DataUsePanel({
   seedCount,
   visibleSeedCount,
 }: DataUsePanelProps) {
+  const [dataUseMode, setDataUseMode] = useState<DataUseMode>("explore");
+  const [exploreQuery, setExploreQuery] = useState("");
   const [insightLens, setInsightLens] = useState<InsightLens>("policy");
   const [regionalInsight, setRegionalInsight] =
     useState<RegionalInsight | null>(null);
@@ -293,6 +300,76 @@ export function DataUsePanel({
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, "ja"))
       .slice(0, 8);
   }, [activePosts]);
+
+  const suggestedExploreKeywords = useMemo(() => {
+    const keywords = [
+      ...tagRanking.map((item) => item.tag),
+      "休憩",
+      "歩きやすい",
+      "静か",
+      "景色",
+    ];
+    return [...new Set(keywords.map((keyword) => keyword.trim()).filter(Boolean))]
+      .slice(0, 8);
+  }, [tagRanking]);
+
+  const exploreResults = useMemo(() => {
+    const terms = normalizeSearchText(exploreQuery)
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const postsWithScore = activePosts.map((post) => {
+      const tags = getPostTags(post);
+      const title = normalizeSearchText(post.title);
+      const summary = normalizeSearchText(post.summary);
+      const tagText = normalizeSearchText(tags.join(" "));
+      const searchText = `${title} ${summary} ${tagText}`;
+      const score =
+        terms.length === 0
+          ? 1
+          : terms.reduce((total, term) => {
+              if (!searchText.includes(term)) {
+                return total;
+              }
+
+              const titleScore = title.includes(term) ? 3 : 0;
+              const summaryScore = summary.includes(term) ? 2 : 0;
+              const tagScore = tagText.includes(term) ? 4 : 0;
+              return total + titleScore + summaryScore + tagScore;
+            }, 0);
+
+      return { post, score };
+    });
+
+    return postsWithScore
+      .filter((item) => item.score > 0)
+      .sort((a, b) => {
+        if (a.score !== b.score) {
+          return b.score - a.score;
+        }
+
+        return (
+          new Date(b.post.createdAt).getTime() -
+          new Date(a.post.createdAt).getTime()
+        );
+      })
+      .slice(0, 8)
+      .map((item) => item.post);
+  }, [activePosts, exploreQuery]);
+
+  const exploreRelatedTags = useMemo(() => {
+    const tagCounts = new Map<string, number>();
+    exploreResults.forEach((post) => {
+      getPostTags(post).forEach((tag) => {
+        tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+      });
+    });
+
+    return [...tagCounts.entries()]
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, "ja"))
+      .slice(0, 6);
+  }, [exploreResults]);
 
   const uniqueTagCount = useMemo(() => {
     const tags = new Set<string>();
@@ -833,6 +910,20 @@ export function DataUsePanel({
   };
 
   const dataUseReport = buildDataUseReport();
+  const dataUseSteps =
+    dataUseMode === "explore"
+      ? [
+          ["1", "キーワードを入れる", "気になる街のよさを探す"],
+          ["2", "タグで広げる", "近い言葉や視点を見つける"],
+          ["3", "投稿を見る", "写真とコメントで確かめる"],
+          ["4", "範囲を変える", "地図を動かして探し直す"],
+        ]
+      : [
+          ["1", "目的を決める", "データの使い道を選ぶ"],
+          ["2", "充実度を見る", "表示範囲の前提を確かめる"],
+          ["3", "AIで分析する", "目的に沿った結果を見る"],
+          ["4", "レポート出力", "結果を共有・再利用する"],
+        ];
 
   return (
     <section className="space-y-5">
@@ -845,18 +936,14 @@ export function DataUsePanel({
             集まった地域データを活用する
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            何に活用するかを決めると、地図で表示している範囲に沿ってAIが地域データを読み解きます。
-            最後に、分析結果をそのまま共有できるレポートとして持ち帰れます。
+            {dataUseMode === "explore"
+              ? "市民や来訪者が、地図で表示している範囲から街のいいところを探せます。"
+              : "何に活用するかを決めると、地図で表示している範囲に沿ってAIが地域データを読み解きます。最後に、分析結果をそのまま共有できるレポートとして持ち帰れます。"}
           </p>
         </div>
 
         <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            ["1", "目的を決める", "データの使い道を選ぶ"],
-            ["2", "充実度を見る", "表示範囲の前提を確かめる"],
-            ["3", "AIで分析する", "目的に沿った結果を見る"],
-            ["4", "レポート出力", "結果を共有・再利用する"],
-          ].map(([step, title, description]) => (
+          {dataUseSteps.map(([step, title, description]) => (
             <div
               key={step}
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
@@ -872,6 +959,181 @@ export function DataUsePanel({
 
       </div>
 
+      <div className="grid gap-3 lg:grid-cols-2">
+        {[
+          [
+            "explore",
+            "市民向け探索モード",
+            "街のいいところを探す",
+            "キーワードやタグから、いま地図に表示している範囲の投稿を探します。",
+          ],
+          [
+            "analyze",
+            "データ活用分析モード",
+            "集まった声を読み解く",
+            "自治体、観光、地域活動の目的に沿ってAI分析とレポート出力を行います。",
+          ],
+        ].map(([mode, eyebrow, title, description]) => {
+          const isActive = dataUseMode === mode;
+
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setDataUseMode(mode as DataUseMode)}
+              className={`rounded-3xl border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
+                isActive
+                  ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/15"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              <p className="text-xs font-bold uppercase tracking-[0.16em] opacity-80">
+                {eyebrow}
+              </p>
+              <h3 className="mt-2 text-lg font-bold text-slate-900">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {description}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {dataUseMode === "explore" ? (
+        <div className="rounded-3xl border border-orange-200 bg-white p-5 shadow-sm shadow-orange-100/70">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-600">
+                EXPLORE
+              </p>
+              <h3 className="mt-1 text-lg font-bold text-slate-900">
+                街のいいところをキーワードで探す
+              </h3>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                現在の地図表示範囲にある市民投稿から、タイトル、コメント、タグに一致する投稿を探します。
+              </p>
+            </div>
+            <div className="rounded-2xl bg-orange-50 px-5 py-4 text-center">
+              <p className="text-xs font-bold text-orange-700">検索対象</p>
+              <p className="mt-1 text-3xl font-black text-slate-900">
+                {activePosts.length.toLocaleString("ja-JP")}件
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <label
+              htmlFor="data-use-explore-query"
+              className="text-sm font-bold text-slate-900"
+            >
+              キーワード
+            </label>
+            <input
+              id="data-use-explore-query"
+              type="search"
+              value={exploreQuery}
+              onChange={(event) => setExploreQuery(event.target.value)}
+              placeholder="例: 休憩、歩きやすい、景色、静か"
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+            />
+            {suggestedExploreKeywords.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {suggestedExploreKeywords.map((keyword) => (
+                  <button
+                    key={keyword}
+                    type="button"
+                    onClick={() => setExploreQuery(keyword)}
+                    className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-800 transition hover:bg-orange-100"
+                  >
+                    #{keyword}
+                  </button>
+                ))}
+                {exploreQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setExploreQuery("")}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                  >
+                    検索をクリア
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            {[
+              ["見つかった投稿", `${exploreResults.length.toLocaleString("ja-JP")}件`],
+              [
+                "関連タグ",
+                exploreRelatedTags.length > 0
+                  ? exploreRelatedTags.map((item) => `#${item.tag}`).join("、")
+                  : "まだありません",
+              ],
+              ["表示範囲", activeScopeLabel],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-2xl border border-orange-100 bg-orange-50/60 p-4"
+              >
+                <p className="text-xs font-bold text-orange-700">{label}</p>
+                <p className="mt-2 text-sm font-bold text-slate-900">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {exploreResults.length > 0 ? (
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              {exploreResults.map((post) => {
+                const tags = getPostTags(post).slice(0, 5);
+
+                return (
+                  <article
+                    key={post.id}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                  >
+                    <div className="grid gap-0 sm:grid-cols-[140px_minmax(0,1fr)]">
+                      <img
+                        src={post.photoUrl}
+                        alt=""
+                        className="h-40 w-full object-cover sm:h-full"
+                        loading="lazy"
+                      />
+                      <div className="p-4">
+                        <p className="text-sm font-bold text-slate-900">
+                          {post.title}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                          {post.summary}
+                        </p>
+                        {tags.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {tags.map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() => setExploreQuery(tag)}
+                                className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700 transition hover:bg-orange-50 hover:text-orange-800"
+                              >
+                                #{tag}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-500">
+              該当する投稿はありません。キーワードを変えるか、地図の表示範囲を広げてみてください。
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
@@ -1355,6 +1617,8 @@ export function DataUsePanel({
           </div>
         </details>
       </div>
+        </>
+      )}
 
       <details className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm shadow-amber-100/70">
         <summary className="cursor-pointer text-lg font-bold text-slate-900">
@@ -1511,158 +1775,164 @@ export function DataUsePanel({
         </div>
       </details>
 
-      <details className="rounded-3xl border border-indigo-200 bg-white p-5 shadow-sm shadow-indigo-100/70">
-        <summary className="cursor-pointer text-lg font-bold text-slate-900">
-          運用情報を見る
-          <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
-            AI operations / logs
-          </span>
-        </summary>
+      {dataUseMode === "analyze" ? (
+        <>
+          <details className="rounded-3xl border border-indigo-200 bg-white p-5 shadow-sm shadow-indigo-100/70">
+            <summary className="cursor-pointer text-lg font-bold text-slate-900">
+              運用情報を見る
+              <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
+                AI operations / logs
+              </span>
+            </summary>
 
-        <div className="mt-4 space-y-4">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">
-              AI活用の運用設計
-            </h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              公共性のある市民投稿データとして扱えるよう、AIの自動判断だけに寄せず、監査・失敗時の継続・人の確認を前提にしています。
-            </p>
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
-            {[
-              [
-                "Workers AI",
-                "画像確認、タグ候補、地域インサイト生成をWorker内で実行します。",
-              ],
-              [
-                "AI Gateway対応",
-                "環境変数を設定すると、AI呼び出しをGateway経由にできます。",
-              ],
-              [
-                "フォールバック",
-                "AI地域インサイトが失敗しても、簡易インサイトで画面を継続します。",
-              ],
-              [
-                "人の確認",
-                "公開可否や最終タグは、AI候補を見た投稿者が判断します。",
-              ],
-            ].map(([label, description]) => (
-              <div
-                key={label}
-                className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"
-              >
-                <p className="text-sm font-bold text-indigo-800">{label}</p>
-                <p className="mt-2 text-xs leading-5 text-slate-600">
-                  {description}
+            <div className="mt-4 space-y-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  AI活用の運用設計
+                </h3>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                  公共性のある市民投稿データとして扱えるよう、AIの自動判断だけに寄せず、監査・失敗時の継続・人の確認を前提にしています。
                 </p>
               </div>
-            ))}
-          </div>
-        </div>
-      </details>
 
-      <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-        <summary className="cursor-pointer text-lg font-bold text-slate-900">
-          AI分析ログを見る
-          <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            optional
-          </span>
-        </summary>
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                {[
+                  [
+                    "Workers AI",
+                    "画像確認、タグ候補、地域インサイト生成をWorker内で実行します。",
+                  ],
+                  [
+                    "AI Gateway対応",
+                    "環境変数を設定すると、AI呼び出しをGateway経由にできます。",
+                  ],
+                  [
+                    "フォールバック",
+                    "AI地域インサイトが失敗しても、簡易インサイトで画面を継続します。",
+                  ],
+                  [
+                    "人の確認",
+                    "公開可否や最終タグは、AI候補を見た投稿者が判断します。",
+                  ],
+                ].map(([label, description]) => (
+                  <div
+                    key={label}
+                    className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"
+                  >
+                    <p className="text-sm font-bold text-indigo-800">{label}</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-600">
+                      {description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
 
-        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              AI analysis logs
-            </p>
-            <h3 className="mt-1 text-lg font-bold text-slate-900">
-              最近のAI分析ログ
-            </h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              AI地域インサイトを生成した範囲・視点・件数・生成方式をD1に残します。
-              監査やデモ後の振り返りに使える、軽量な運用ログです。
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={loadAnalysisLogs}
-            disabled={isLoadingAnalysisLogs}
-            className="w-full rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 md:w-auto"
-          >
-            {isLoadingAnalysisLogs ? "更新中..." : "ログを更新"}
-          </button>
-        </div>
+          <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+            <summary className="cursor-pointer text-lg font-bold text-slate-900">
+              AI分析ログを見る
+              <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                optional
+              </span>
+            </summary>
 
-        {analysisLogError ? (
-          <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {analysisLogError}
-          </p>
-        ) : null}
+            <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  AI analysis logs
+                </p>
+                <h3 className="mt-1 text-lg font-bold text-slate-900">
+                  最近のAI分析ログ
+                </h3>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                  AI地域インサイトを生成した範囲・視点・件数・生成方式をD1に残します。
+                  監査やデモ後の振り返りに使える、軽量な運用ログです。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadAnalysisLogs}
+                disabled={isLoadingAnalysisLogs}
+                className="w-full rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 md:w-auto"
+              >
+                {isLoadingAnalysisLogs ? "更新中..." : "ログを更新"}
+              </button>
+            </div>
 
-        {analysisLogs.length > 0 ? (
-          <div className="mt-4 space-y-3">
-            {analysisLogs.map((log) => {
-              const lensLabel =
-                insightLensOptions.find((option) => option.value === log.lens)
-                  ?.label ?? "自治体施策";
-              const topTags =
-                log.tagSummary.length > 0
-                  ? log.tagSummary
-                      .slice(0, 3)
-                      .map((item) => `#${item.tag}`)
-                      .join("、")
-                  : "タグ未蓄積";
+            {analysisLogError ? (
+              <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {analysisLogError}
+              </p>
+            ) : null}
 
-              return (
-                <div
-                  key={log.id}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-500">
-                        {formatLogDate(log.createdAt)} / {lensLabel} /{" "}
-                        {log.scope === "all" ? "全件データ" : "表示範囲"}
-                      </p>
-                      <p className="mt-1 truncate text-sm font-bold text-slate-900">
-                        {typeof log.outputSummary.overview === "string"
-                          ? log.outputSummary.overview
-                          : "AI地域インサイトを生成しました。"}
-                      </p>
+            {analysisLogs.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {analysisLogs.map((log) => {
+                  const lensLabel =
+                    insightLensOptions.find(
+                      (option) => option.value === log.lens,
+                    )?.label ?? "自治体施策";
+                  const topTags =
+                    log.tagSummary.length > 0
+                      ? log.tagSummary
+                          .slice(0, 3)
+                          .map((item) => `#${item.tag}`)
+                          .join("、")
+                      : "タグ未蓄積";
+
+                  return (
+                    <div
+                      key={log.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-500">
+                            {formatLogDate(log.createdAt)} / {lensLabel} /{" "}
+                            {log.scope === "all" ? "全件データ" : "表示範囲"}
+                          </p>
+                          <p className="mt-1 truncate text-sm font-bold text-slate-900">
+                            {typeof log.outputSummary.overview === "string"
+                              ? log.outputSummary.overview
+                              : "AI地域インサイトを生成しました。"}
+                          </p>
+                        </div>
+                        <span className="w-fit shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-600">
+                          {log.source === "ai" ? "Workers AI" : "フォールバック"}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                        <span className="rounded-xl bg-white px-3 py-2">
+                          市民投稿 {log.postCount.toLocaleString("ja-JP")}件
+                        </span>
+                        <span className="rounded-xl bg-white px-3 py-2">
+                          行政データ{" "}
+                          {log.adminPlaceCount.toLocaleString("ja-JP")}件
+                        </span>
+                        <span className="rounded-xl bg-white px-3 py-2">
+                          上位タグ {topTags}
+                        </span>
+                      </div>
                     </div>
-                    <span className="w-fit shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-600">
-                      {log.source === "ai" ? "Workers AI" : "フォールバック"}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
-                    <span className="rounded-xl bg-white px-3 py-2">
-                      市民投稿 {log.postCount.toLocaleString("ja-JP")}件
-                    </span>
-                    <span className="rounded-xl bg-white px-3 py-2">
-                      行政データ{" "}
-                      {log.adminPlaceCount.toLocaleString("ja-JP")}件
-                    </span>
-                    <span className="rounded-xl bg-white px-3 py-2">
-                      上位タグ {topTags}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-500">
-            まだAI分析ログはありません。「AIで地域を読み解く」を実行すると、分析履歴がここに残ります。
-          </p>
-        )}
-      </details>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-500">
+                まだAI分析ログはありません。「AIで地域を読み解く」を実行すると、分析履歴がここに残ります。
+              </p>
+            )}
+          </details>
+        </>
+      ) : null}
 
       <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-900">
         <h3 className="font-bold">デモで伝えられること</h3>
         <p className="mt-2">
-          この画面は、投稿を集めるだけでなく、地域の魅力データとして分析・共有・再利用できることを示します。
-          行政オープンデータと市民投稿を重ねることで、観光ルートづくり、地域資源の発見、施策検討のための一次情報として活用できます。
+          {dataUseMode === "explore"
+            ? "この画面は、市民投稿が街の発見体験としてそのまま使えることを示します。キーワードやタグから地域のいいところを探せるため、投稿する人と使う人の循環を見せられます。"
+            : "この画面は、投稿を集めるだけでなく、地域の魅力データとして分析・共有・再利用できることを示します。行政オープンデータと市民投稿を重ねることで、観光ルートづくり、地域資源の発見、施策検討のための一次情報として活用できます。"}
         </p>
       </div>
     </section>
