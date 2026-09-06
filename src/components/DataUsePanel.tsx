@@ -934,6 +934,26 @@ export function DataUsePanel({
           </div>
         </div>
 
+        <div className="mt-5 grid gap-2 md:grid-cols-4">
+          {[
+            ["1", "条件を決める", "範囲と利用目的を選ぶ"],
+            ["2", "AIで読み解く", "発見・注意点・次の行動を見る"],
+            ["3", "持ち帰る", "1枚レポートとしてコピーする"],
+            ["4", "根拠を見る", "タグ・ギャップ・近接関係を確認する"],
+          ].map(([step, title, description]) => (
+            <div
+              key={step}
+              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            >
+              <p className="text-xs font-black text-primary">STEP {step}</p>
+              <p className="mt-1 text-sm font-bold text-slate-900">{title}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                {description}
+              </p>
+            </div>
+          ))}
+        </div>
+
         <div className="mt-5 rounded-2xl bg-slate-50 p-2">
           <div className="grid gap-2 sm:grid-cols-2">
             <button
@@ -982,15 +1002,15 @@ export function DataUsePanel({
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Use case stories
+              Analysis purpose
             </p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">
-              このデータを誰がどう使うか
+              利用目的を選ぶ
             </h3>
           </div>
           <p className="max-w-2xl text-sm leading-6 text-slate-600">
             活用する人の視点を選ぶと、AI地域インサイトの分析視点も切り替わります。
-            データ収集から意思決定・発信・参加促進までの流れをデモで説明しやすくします。
+            以降の分析・レポート・収集テーマが、この目的に沿って読みやすくなります。
           </p>
         </div>
 
@@ -1015,9 +1035,6 @@ export function DataUsePanel({
                 <h4 className="mt-2 text-base font-bold text-slate-900">
                   {story.title}
                 </h4>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {story.scenario}
-                </p>
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   {story.outputs.map((output) => (
@@ -1030,7 +1047,13 @@ export function DataUsePanel({
                   ))}
                 </div>
 
-                <p className="mt-4 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-slate-700">
+                {isActive ? (
+                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                    {story.scenario}
+                  </p>
+                ) : null}
+
+                <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-slate-700">
                   次の一手: {story.nextStep}
                 </p>
               </button>
@@ -1405,16 +1428,23 @@ export function DataUsePanel({
         )}
       </div>
 
-      <div className="rounded-3xl border border-indigo-200 bg-white p-5 shadow-sm shadow-indigo-100/70">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
-          AI operations
-        </p>
-        <h3 className="mt-1 text-lg font-bold text-slate-900">
-          AI活用の運用設計
-        </h3>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          公共性のある市民投稿データとして扱えるよう、AIの自動判断だけに寄せず、監査・失敗時の継続・人の確認を前提にしています。
-        </p>
+      <details className="rounded-3xl border border-indigo-200 bg-white p-5 shadow-sm shadow-indigo-100/70">
+        <summary className="cursor-pointer text-lg font-bold text-slate-900">
+          運用情報を見る
+          <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
+            AI operations / logs
+          </span>
+        </summary>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">
+              AI活用の運用設計
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              公共性のある市民投稿データとして扱えるよう、AIの自動判断だけに寄せず、監査・失敗時の継続・人の確認を前提にしています。
+            </p>
+          </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           {[
@@ -1446,10 +1476,18 @@ export function DataUsePanel({
             </div>
           ))}
         </div>
-      </div>
+        </div>
+      </details>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+        <summary className="cursor-pointer text-lg font-bold text-slate-900">
+          AI分析ログを見る
+          <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            optional
+          </span>
+        </summary>
+
+        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               AI analysis logs
@@ -1535,7 +1573,7 @@ export function DataUsePanel({
             まだAI分析ログはありません。「AIで地域を読み解く」を実行すると、分析履歴がここに残ります。
           </p>
         )}
-      </div>
+      </details>
 
       <div className="rounded-3xl border border-teal-200 bg-white p-5 shadow-sm shadow-teal-100/70">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1614,6 +1652,15 @@ export function DataUsePanel({
         )}
       </div>
 
+      <details className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm shadow-amber-100/70">
+        <summary className="cursor-pointer text-lg font-bold text-slate-900">
+          根拠データを見る
+          <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-600">
+            tags / gaps / nearby
+          </span>
+        </summary>
+
+        <div className="mt-4 space-y-5">
       <div className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm shadow-amber-100/70">
         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
           <div>
@@ -1757,6 +1804,8 @@ export function DataUsePanel({
           )}
         </div>
       </div>
+        </div>
+      </details>
 
       <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-900">
         <h3 className="font-bold">デモで伝えられること</h3>
