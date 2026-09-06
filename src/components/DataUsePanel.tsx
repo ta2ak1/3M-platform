@@ -660,6 +660,9 @@ export function DataUsePanel({
     },
     [activePosts, ccByRate, gapCandidates],
   );
+  const tagRankingDependencyKey = tagRanking
+    .map((item) => `${item.tag}:${item.count}`)
+    .join("|");
 
   useEffect(() => {
     setRegionalInsight(null);
@@ -670,7 +673,7 @@ export function DataUsePanel({
     insightLens,
     activePosts.length,
     activeAdminPlaces.length,
-    tagRanking.map((item) => `${item.tag}:${item.count}`).join("|"),
+    tagRankingDependencyKey,
   ]);
 
   const handleGenerateRegionalInsight = async () => {
