@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchAdminPlaces,
+  fetchAiAnalysisLogs,
   fetchPosts,
   fetchRegionalInsight,
 } from "../lib/api";
@@ -9,7 +10,12 @@ import {
   splitUrbanExperienceTags,
   urbanExperienceTags,
 } from "../lib/urbanExperienceTags";
-import type { AdminPlace, CommunityPost, RegionalInsight } from "../types";
+import type {
+  AdminPlace,
+  AiAnalysisLog,
+  CommunityPost,
+  RegionalInsight,
+} from "../types";
 
 type DataUsePanelProps = {
   posts: CommunityPost[];
@@ -167,6 +173,20 @@ function buildMarkdownList(items: string[]) {
     : "- まだ十分な材料がありません。";
 }
 
+function formatLogDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "日時不明";
+  }
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function buildPostsCsv(posts: CommunityPost[]) {
   const rows = [
     [
@@ -246,6 +266,9 @@ export function DataUsePanel({
   const [insightError, setInsightError] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [showDataUseReport, setShowDataUseReport] = useState(false);
+  const [analysisLogs, setAnalysisLogs] = useState<AiAnalysisLog[]>([]);
+  const [isLoadingAnalysisLogs, setIsLoadingAnalysisLogs] = useState(false);
+  const [analysisLogError, setAnalysisLogError] = useState<string | null>(null);
 
   useEffect(() => {
     if (
@@ -294,6 +317,24 @@ export function DataUsePanel({
       cancelled = true;
     };
   }, [allAdminPlaces, allPosts, isLoadingAllData, scope]);
+
+  const loadAnalysisLogs = async () => {
+    setIsLoadingAnalysisLogs(true);
+    setAnalysisLogError(null);
+
+    try {
+      const logs = await fetchAiAnalysisLogs({ limit: 5 });
+      setAnalysisLogs(logs);
+    } catch {
+      setAnalysisLogError("AI分析ログの取得に失敗しました。");
+    } finally {
+      setIsLoadingAnalysisLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadAnalysisLogs();
+  }, []);
 
   const hasAllData = allPosts != null && allAdminPlaces != null;
   const usesAllData = scope === "all" && hasAllData;
@@ -649,6 +690,7 @@ export function DataUsePanel({
         gapCandidates: regionalInsightGapCandidates,
       });
       setRegionalInsight(insight);
+      await loadAnalysisLogs();
     } catch {
       setInsightError(
         "AI地域インサイトの生成に失敗しました。少し時間を置いて再度お試しください。",
@@ -1401,6 +1443,95 @@ export function DataUsePanel({
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              AI analysis logs
+            </p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              最近のAI分析ログ
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              AI地域インサイトを生成した範囲・視点・件数・生成方式をD1に残します。
+              監査やデモ後の振り返りに使える、軽量な運用ログです。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={loadAnalysisLogs}
+            disabled={isLoadingAnalysisLogs}
+            className="w-full rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 md:w-auto"
+          >
+            {isLoadingAnalysisLogs ? "更新中..." : "ログを更新"}
+          </button>
+        </div>
+
+        {analysisLogError ? (
+          <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {analysisLogError}
+          </p>
+        ) : null}
+
+        {analysisLogs.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            {analysisLogs.map((log) => {
+              const lensLabel =
+                insightLensOptions.find((option) => option.value === log.lens)
+                  ?.label ?? "自治体施策";
+              const topTags =
+                log.tagSummary.length > 0
+                  ? log.tagSummary
+                      .slice(0, 3)
+                      .map((item) => `#${item.tag}`)
+                      .join("、")
+                  : "タグ未蓄積";
+
+              return (
+                <div
+                  key={log.id}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-500">
+                        {formatLogDate(log.createdAt)} / {lensLabel} /{" "}
+                        {log.scope === "all" ? "全件データ" : "表示範囲"}
+                      </p>
+                      <p className="mt-1 truncate text-sm font-bold text-slate-900">
+                        {typeof log.outputSummary.overview === "string"
+                          ? log.outputSummary.overview
+                          : "AI地域インサイトを生成しました。"}
+                      </p>
+                    </div>
+                    <span className="w-fit shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-600">
+                      {log.source === "ai" ? "Workers AI" : "フォールバック"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                    <span className="rounded-xl bg-white px-3 py-2">
+                      市民投稿 {log.postCount.toLocaleString("ja-JP")}件
+                    </span>
+                    <span className="rounded-xl bg-white px-3 py-2">
+                      行政データ{" "}
+                      {log.adminPlaceCount.toLocaleString("ja-JP")}件
+                    </span>
+                    <span className="rounded-xl bg-white px-3 py-2">
+                      上位タグ {topTags}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-500">
+            まだAI分析ログはありません。「AIで地域を読み解く」を実行すると、分析履歴がここに残ります。
+          </p>
+        )}
       </div>
 
       <div className="rounded-3xl border border-teal-200 bg-white p-5 shadow-sm shadow-teal-100/70">

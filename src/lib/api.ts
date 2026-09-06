@@ -1,4 +1,9 @@
-import type { AdminPlace, CommunityPost, RegionalInsight } from "../types";
+import type {
+  AdminPlace,
+  AiAnalysisLog,
+  CommunityPost,
+  RegionalInsight,
+} from "../types";
 import { mockPosts } from "./mockData";
 
 const API_BASE = "/api";
@@ -195,6 +200,34 @@ export async function fetchRegionalInsight(payload: {
   }
 
   return result.insight;
+}
+
+export async function fetchAiAnalysisLogs(options?: {
+  limit?: number;
+}): Promise<AiAnalysisLog[]> {
+  const params = new URLSearchParams();
+  if (options?.limit != null) {
+    params.set("limit", String(options.limit));
+  }
+
+  const response = await fetch(
+    `${API_BASE}/insights/logs${params.toString() ? `?${params}` : ""}`,
+    {
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as {
+    logs?: AiAnalysisLog[];
+  };
+
+  return payload.logs ?? [];
 }
 
 export async function submitPost(formData: FormData): Promise<CommunityPost> {

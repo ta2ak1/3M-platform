@@ -95,6 +95,36 @@ type RegionalInsight = {
   source: "ai" | "fallback";
 };
 
+type AiAnalysisLog = {
+  id: string;
+  analysisType: "regional_insight";
+  scope: "visible" | "all";
+  lens: "policy" | "tourism" | "community";
+  source: "ai" | "fallback";
+  postCount: number;
+  adminPlaceCount: number;
+  tagSummary: { tag: string; count: number }[];
+  gapSummary: RegionalGapCandidate[];
+  inputSummary: Record<string, unknown>;
+  outputSummary: Record<string, unknown>;
+  createdAt: string;
+};
+
+type AiAnalysisLogRow = {
+  id: string;
+  analysisType: "regional_insight";
+  scope: "visible" | "all";
+  lens: "policy" | "tourism" | "community";
+  source: "ai" | "fallback";
+  postCount: number;
+  adminPlaceCount: number;
+  tagSummary: string;
+  gapSummary: string;
+  inputSummary: string;
+  outputSummary: string;
+  createdAt: string;
+};
+
 type RegionalGapCandidate = {
   type: "admin_without_posts" | "post_without_admin";
   title: string;
@@ -153,10 +183,14 @@ const defaultPosts: CommunityPost[] = [
 
 const inMemoryStore = globalThis as typeof globalThis & {
   __community_posts__?: CommunityPost[];
+  __ai_analysis_logs__?: AiAnalysisLog[];
 };
 
 if (!inMemoryStore.__community_posts__) {
   inMemoryStore.__community_posts__ = [...defaultPosts];
+}
+if (!inMemoryStore.__ai_analysis_logs__) {
+  inMemoryStore.__ai_analysis_logs__ = [];
 }
 
 function getStoredPosts(): CommunityPost[] {
@@ -333,6 +367,18 @@ function safeParseTags(value?: string): string[] {
   }
 }
 
+function safeParseJson<T>(value: string | undefined, fallback: T): T {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
   if (!db) {
     return;
@@ -358,6 +404,120 @@ async function writePostToD1(db: D1Database | undefined, post: CommunityPost) {
       JSON.stringify(post.humanTags ?? post.tags ?? []),
     )
     .run();
+}
+
+function buildAiAnalysisLog(input: {
+  scope: "visible" | "all";
+  lens: "policy" | "tourism" | "community";
+  posts: CommunityPost[];
+  adminPlaces: AdminPlace[];
+  seedCount: number;
+  visibleSeedCount: number;
+  tagRanking: { tag: string; count: number }[];
+  ccByPostCount: number;
+  gapCandidates: RegionalGapCandidate[];
+  insight: RegionalInsight;
+}): AiAnalysisLog {
+  return {
+    id: crypto.randomUUID(),
+    analysisType: "regional_insight",
+    scope: input.scope,
+    lens: input.lens,
+    source: input.insight.source,
+    postCount: input.posts.length,
+    adminPlaceCount: input.visibleSeedCount,
+    tagSummary: input.tagRanking.slice(0, 8),
+    gapSummary: input.gapCandidates.slice(0, 6),
+    inputSummary: {
+      seedCount: input.seedCount,
+      visibleSeedCount: input.visibleSeedCount,
+      ccByPostCount: input.ccByPostCount,
+      representativePostIds: input.posts.slice(0, 8).map((post) => post.id),
+      representativeAdminPlaceIds: input.adminPlaces
+        .slice(0, 12)
+        .map((place) => place.id),
+    },
+    outputSummary: {
+      overview: input.insight.overview,
+      findings: input.insight.findings,
+      risks: input.insight.risks,
+      recommendedActions: input.insight.recommendedActions,
+      dataGaps: input.insight.dataGaps,
+      collectionThemes: input.insight.collectionThemes,
+      caveat: input.insight.caveat,
+    },
+    createdAt: new Date().toISOString(),
+  };
+}
+
+async function writeAiAnalysisLogToD1(
+  db: D1Database | undefined,
+  log: AiAnalysisLog,
+) {
+  if (!db) {
+    return;
+  }
+
+  try {
+    await db
+      .prepare(
+        "INSERT INTO ai_analysis_logs (id, analysis_type, scope, lens, source, post_count, admin_place_count, tag_summary, gap_summary, input_summary, output_summary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .bind(
+        log.id,
+        log.analysisType,
+        log.scope,
+        log.lens,
+        log.source,
+        log.postCount,
+        log.adminPlaceCount,
+        JSON.stringify(log.tagSummary),
+        JSON.stringify(log.gapSummary),
+        JSON.stringify(log.inputSummary),
+        JSON.stringify(log.outputSummary),
+        log.createdAt,
+      )
+      .run();
+  } catch {
+    // Migration未適用の環境でも、分析結果の返却自体は継続する。
+  }
+}
+
+async function readAiAnalysisLogsFromD1(
+  db: D1Database | undefined,
+  limit = 10,
+): Promise<AiAnalysisLog[]> {
+  if (!db) {
+    return [];
+  }
+
+  const safeLimit = Math.min(Math.max(1, limit), 50);
+
+  try {
+    const results = await db
+      .prepare(
+        "SELECT id, analysis_type AS analysisType, scope, lens, source, post_count AS postCount, admin_place_count AS adminPlaceCount, tag_summary AS tagSummary, gap_summary AS gapSummary, input_summary AS inputSummary, output_summary AS outputSummary, created_at AS createdAt FROM ai_analysis_logs ORDER BY created_at DESC LIMIT ?",
+      )
+      .bind(safeLimit)
+      .all<AiAnalysisLogRow>();
+
+    return (results.results ?? []).map((row) => ({
+      id: row.id,
+      analysisType: row.analysisType,
+      scope: row.scope,
+      lens: row.lens,
+      source: row.source,
+      postCount: Number(row.postCount),
+      adminPlaceCount: Number(row.adminPlaceCount),
+      tagSummary: safeParseJson(row.tagSummary, []),
+      gapSummary: safeParseJson(row.gapSummary, []),
+      inputSummary: safeParseJson(row.inputSummary, {}),
+      outputSummary: safeParseJson(row.outputSummary, {}),
+      createdAt: row.createdAt,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 async function ensureSeedData(db: D1Database | undefined) {
@@ -1544,7 +1704,17 @@ app.post("/api/insights/region", async (c) => {
       })
     : [];
 
-  const insight = await runRegionalInsight(c.env, {
+  const insightInput: {
+    scope: "visible" | "all";
+    lens: "policy" | "tourism" | "community";
+    posts: CommunityPost[];
+    adminPlaces: AdminPlace[];
+    seedCount: number;
+    visibleSeedCount: number;
+    tagRanking: { tag: string; count: number }[];
+    ccByPostCount: number;
+    gapCandidates: RegionalGapCandidate[];
+  } = {
     scope: body.scope === "all" ? "all" : "visible",
     lens:
       body.lens === "tourism" || body.lens === "community"
@@ -1597,9 +1767,40 @@ app.post("/api/insights/region", async (c) => {
           ];
         })
       : [],
-  });
+  };
+
+  const insight = await runRegionalInsight(c.env, insightInput);
+  const log = buildAiAnalysisLog({ ...insightInput, insight });
+
+  if (c.env.DB) {
+    await writeAiAnalysisLogToD1(c.env.DB, log);
+  } else {
+    inMemoryStore.__ai_analysis_logs__ = [
+      log,
+      ...(inMemoryStore.__ai_analysis_logs__ ?? []),
+    ].slice(0, 50);
+  }
 
   return c.json({ ok: true, insight });
+});
+
+app.get("/api/insights/logs", async (c) => {
+  const limit = parseInt(c.req.query("limit") ?? "10", 10);
+
+  if (c.env.DB) {
+    const logs = await readAiAnalysisLogsFromD1(
+      c.env.DB,
+      Number.isFinite(limit) ? limit : 10,
+    );
+    return c.json({ logs });
+  }
+
+  return c.json({
+    logs: (inMemoryStore.__ai_analysis_logs__ ?? []).slice(
+      0,
+      Number.isFinite(limit) ? Math.min(Math.max(1, limit), 50) : 10,
+    ),
+  });
 });
 
 app.post("/api/posts/precheck", async (c) => {

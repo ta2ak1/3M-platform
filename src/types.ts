@@ -41,3 +41,23 @@ export type RegionalInsight = {
   generatedAt: string;
   source: "ai" | "fallback";
 };
+
+export type AiAnalysisLog = {
+  id: string;
+  analysisType: "regional_insight";
+  scope: "visible" | "all";
+  lens: "policy" | "tourism" | "community";
+  source: "ai" | "fallback";
+  postCount: number;
+  adminPlaceCount: number;
+  tagSummary: { tag: string; count: number }[];
+  gapSummary: {
+    type: "admin_without_posts" | "post_without_admin";
+    title: string;
+    description: string;
+    distanceMeters?: number;
+  }[];
+  inputSummary: Record<string, unknown>;
+  outputSummary: Record<string, unknown>;
+  createdAt: string;
+};
