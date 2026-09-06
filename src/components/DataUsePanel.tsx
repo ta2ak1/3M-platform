@@ -1160,64 +1160,6 @@ export function DataUsePanel({
         </div>
       </div>
 
-      <div className="rounded-3xl border border-emerald-200 bg-white p-5 shadow-sm shadow-emerald-100/70">
-        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
-              Collection strategy
-            </p>
-            <h3 className="mt-1 text-lg font-bold text-slate-900">
-              次に集める投稿テーマ
-            </h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              投稿数・都市体験タグ・行政データとのギャップ・再利用性から、次の投稿キャンペーン候補を整理します。
-              データを集めるだけでなく、何を増やすと活用しやすくなるかを示します。
-            </p>
-          </div>
-          <span className="w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-            {collectionCampaignSuggestions.length}件の候補
-          </span>
-        </div>
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          {collectionCampaignSuggestions.map((suggestion) => (
-            <div
-              key={suggestion.id}
-              className={`rounded-2xl border p-4 ${suggestion.tone}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">
-                    投稿キャンペーン案
-                  </p>
-                  <h4 className="mt-1 text-base font-bold text-slate-900">
-                    {suggestion.title}
-                  </h4>
-                </div>
-                <span className="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-xs font-black text-slate-700">
-                  優先度 {suggestion.priority}
-                </span>
-              </div>
-
-              <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
-                <p>
-                  <span className="font-bold text-slate-900">理由:</span>{" "}
-                  {suggestion.reason}
-                </p>
-                <p>
-                  <span className="font-bold text-slate-900">呼びかけ:</span>{" "}
-                  {suggestion.ask}
-                </p>
-                <p>
-                  <span className="font-bold text-slate-900">活用先:</span>{" "}
-                  {suggestion.expectedUse}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       <div className="rounded-3xl border border-violet-200 bg-white p-5 shadow-sm shadow-violet-100/70">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -1426,154 +1368,64 @@ export function DataUsePanel({
             デモでは、投稿が少ない状態でも「どのデータをもとに何が言えるか」をAIが慎重に整理する様子を見せられます。
           </p>
         )}
-      </div>
 
-      <details className="rounded-3xl border border-indigo-200 bg-white p-5 shadow-sm shadow-indigo-100/70">
-        <summary className="cursor-pointer text-lg font-bold text-slate-900">
-          運用情報を見る
-          <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
-            AI operations / logs
-          </span>
-        </summary>
-
-        <div className="mt-4 space-y-4">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">
-              AI活用の運用設計
-            </h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              公共性のある市民投稿データとして扱えるよう、AIの自動判断だけに寄せず、監査・失敗時の継続・人の確認を前提にしています。
-            </p>
-          </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-4">
-          {[
-            [
-              "Workers AI",
-              "画像確認、タグ候補、地域インサイト生成をWorker内で実行します。",
-            ],
-            [
-              "AI Gateway対応",
-              "環境変数を設定すると、AI呼び出しをGateway経由にできます。",
-            ],
-            [
-              "フォールバック",
-              "AI地域インサイトが失敗しても、簡易インサイトで画面を継続します。",
-            ],
-            [
-              "人の確認",
-              "公開可否や最終タグは、AI候補を見た投稿者が判断します。",
-            ],
-          ].map(([label, description]) => (
-            <div
-              key={label}
-              className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"
-            >
-              <p className="text-sm font-bold text-indigo-800">{label}</p>
-              <p className="mt-2 text-xs leading-5 text-slate-600">
-                {description}
+        <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
+                Collection strategy
+              </p>
+              <h4 className="mt-1 text-base font-bold text-slate-900">
+                次に集める投稿テーマ
+              </h4>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                分析結果を、次の投稿キャンペーン候補へつなげます。
               </p>
             </div>
-          ))}
-        </div>
-        </div>
-      </details>
-
-      <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-        <summary className="cursor-pointer text-lg font-bold text-slate-900">
-          AI分析ログを見る
-          <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            optional
-          </span>
-        </summary>
-
-        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              AI analysis logs
-            </p>
-            <h3 className="mt-1 text-lg font-bold text-slate-900">
-              最近のAI分析ログ
-            </h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              AI地域インサイトを生成した範囲・視点・件数・生成方式をD1に残します。
-              監査やデモ後の振り返りに使える、軽量な運用ログです。
-            </p>
+            <span className="w-fit rounded-full bg-white px-3 py-1.5 text-xs font-bold text-emerald-700">
+              {collectionCampaignSuggestions.length}件の候補
+            </span>
           </div>
-          <button
-            type="button"
-            onClick={loadAnalysisLogs}
-            disabled={isLoadingAnalysisLogs}
-            className="w-full rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 md:w-auto"
-          >
-            {isLoadingAnalysisLogs ? "更新中..." : "ログを更新"}
-          </button>
-        </div>
 
-        {analysisLogError ? (
-          <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {analysisLogError}
-          </p>
-        ) : null}
-
-        {analysisLogs.length > 0 ? (
-          <div className="mt-4 space-y-3">
-            {analysisLogs.map((log) => {
-              const lensLabel =
-                insightLensOptions.find((option) => option.value === log.lens)
-                  ?.label ?? "自治体施策";
-              const topTags =
-                log.tagSummary.length > 0
-                  ? log.tagSummary
-                      .slice(0, 3)
-                      .map((item) => `#${item.tag}`)
-                      .join("、")
-                  : "タグ未蓄積";
-
-              return (
-                <div
-                  key={log.id}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-500">
-                        {formatLogDate(log.createdAt)} / {lensLabel} /{" "}
-                        {log.scope === "all" ? "全件データ" : "表示範囲"}
-                      </p>
-                      <p className="mt-1 truncate text-sm font-bold text-slate-900">
-                        {typeof log.outputSummary.overview === "string"
-                          ? log.outputSummary.overview
-                          : "AI地域インサイトを生成しました。"}
-                      </p>
-                    </div>
-                    <span className="w-fit shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-600">
-                      {log.source === "ai" ? "Workers AI" : "フォールバック"}
-                    </span>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {collectionCampaignSuggestions.map((suggestion) => (
+              <div
+                key={suggestion.id}
+                className={`rounded-2xl border bg-white/80 p-4 ${suggestion.tone}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">
+                      投稿キャンペーン案
+                    </p>
+                    <h5 className="mt-1 text-sm font-bold text-slate-900">
+                      {suggestion.title}
+                    </h5>
                   </div>
-
-                  <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
-                    <span className="rounded-xl bg-white px-3 py-2">
-                      市民投稿 {log.postCount.toLocaleString("ja-JP")}件
-                    </span>
-                    <span className="rounded-xl bg-white px-3 py-2">
-                      行政データ{" "}
-                      {log.adminPlaceCount.toLocaleString("ja-JP")}件
-                    </span>
-                    <span className="rounded-xl bg-white px-3 py-2">
-                      上位タグ {topTags}
-                    </span>
-                  </div>
+                  <span className="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-xs font-black text-slate-700">
+                    優先度 {suggestion.priority}
+                  </span>
                 </div>
-              );
-            })}
+
+                <div className="mt-3 space-y-2 text-xs leading-5 text-slate-700">
+                  <p>
+                    <span className="font-bold text-slate-900">理由:</span>{" "}
+                    {suggestion.reason}
+                  </p>
+                  <p>
+                    <span className="font-bold text-slate-900">呼びかけ:</span>{" "}
+                    {suggestion.ask}
+                  </p>
+                  <p>
+                    <span className="font-bold text-slate-900">活用先:</span>{" "}
+                    {suggestion.expectedUse}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
-        ) : (
-          <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-500">
-            まだAI分析ログはありません。「AIで地域を読み解く」を実行すると、分析履歴がここに残ります。
-          </p>
-        )}
-      </details>
+        </div>
+      </div>
 
       <div className="rounded-3xl border border-teal-200 bg-white p-5 shadow-sm shadow-teal-100/70">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1805,6 +1657,153 @@ export function DataUsePanel({
         </div>
       </div>
         </div>
+      </details>
+
+      <details className="rounded-3xl border border-indigo-200 bg-white p-5 shadow-sm shadow-indigo-100/70">
+        <summary className="cursor-pointer text-lg font-bold text-slate-900">
+          運用情報を見る
+          <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
+            AI operations / logs
+          </span>
+        </summary>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">
+              AI活用の運用設計
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              公共性のある市民投稿データとして扱えるよう、AIの自動判断だけに寄せず、監査・失敗時の継続・人の確認を前提にしています。
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            {[
+              [
+                "Workers AI",
+                "画像確認、タグ候補、地域インサイト生成をWorker内で実行します。",
+              ],
+              [
+                "AI Gateway対応",
+                "環境変数を設定すると、AI呼び出しをGateway経由にできます。",
+              ],
+              [
+                "フォールバック",
+                "AI地域インサイトが失敗しても、簡易インサイトで画面を継続します。",
+              ],
+              [
+                "人の確認",
+                "公開可否や最終タグは、AI候補を見た投稿者が判断します。",
+              ],
+            ].map(([label, description]) => (
+              <div
+                key={label}
+                className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"
+              >
+                <p className="text-sm font-bold text-indigo-800">{label}</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  {description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </details>
+
+      <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+        <summary className="cursor-pointer text-lg font-bold text-slate-900">
+          AI分析ログを見る
+          <span className="ml-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            optional
+          </span>
+        </summary>
+
+        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              AI analysis logs
+            </p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              最近のAI分析ログ
+            </h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              AI地域インサイトを生成した範囲・視点・件数・生成方式をD1に残します。
+              監査やデモ後の振り返りに使える、軽量な運用ログです。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={loadAnalysisLogs}
+            disabled={isLoadingAnalysisLogs}
+            className="w-full rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 md:w-auto"
+          >
+            {isLoadingAnalysisLogs ? "更新中..." : "ログを更新"}
+          </button>
+        </div>
+
+        {analysisLogError ? (
+          <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {analysisLogError}
+          </p>
+        ) : null}
+
+        {analysisLogs.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            {analysisLogs.map((log) => {
+              const lensLabel =
+                insightLensOptions.find((option) => option.value === log.lens)
+                  ?.label ?? "自治体施策";
+              const topTags =
+                log.tagSummary.length > 0
+                  ? log.tagSummary
+                      .slice(0, 3)
+                      .map((item) => `#${item.tag}`)
+                      .join("、")
+                  : "タグ未蓄積";
+
+              return (
+                <div
+                  key={log.id}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-500">
+                        {formatLogDate(log.createdAt)} / {lensLabel} /{" "}
+                        {log.scope === "all" ? "全件データ" : "表示範囲"}
+                      </p>
+                      <p className="mt-1 truncate text-sm font-bold text-slate-900">
+                        {typeof log.outputSummary.overview === "string"
+                          ? log.outputSummary.overview
+                          : "AI地域インサイトを生成しました。"}
+                      </p>
+                    </div>
+                    <span className="w-fit shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-600">
+                      {log.source === "ai" ? "Workers AI" : "フォールバック"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                    <span className="rounded-xl bg-white px-3 py-2">
+                      市民投稿 {log.postCount.toLocaleString("ja-JP")}件
+                    </span>
+                    <span className="rounded-xl bg-white px-3 py-2">
+                      行政データ{" "}
+                      {log.adminPlaceCount.toLocaleString("ja-JP")}件
+                    </span>
+                    <span className="rounded-xl bg-white px-3 py-2">
+                      上位タグ {topTags}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-500">
+            まだAI分析ログはありません。「AIで地域を読み解く」を実行すると、分析履歴がここに残ります。
+          </p>
+        )}
       </details>
 
       <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-900">
