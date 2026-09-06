@@ -668,6 +668,7 @@ export function DataUsePanel({
     setRegionalInsight(null);
     setInsightError(null);
     setCopyMessage(null);
+    setShowDataUseReport(false);
   }, [
     activeScopeLabel,
     insightLens,
@@ -904,42 +905,23 @@ export function DataUsePanel({
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
           Data use view
         </p>
-        <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">
-              集まった地域データを活用する
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              市民投稿と行政オープンデータを重ね、地域の魅力や関心の偏りを見える化します。
-              投稿データはCSV / GeoJSONとして出力でき、まちづくり・観光・地域PRの素材として再利用できます。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleDownloadCsv}
-              disabled={activePosts.length === 0}
-              className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary-strong disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              CSVをダウンロード
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadGeoJson}
-              disabled={activePosts.length === 0}
-              className="rounded-full border border-primary/30 bg-white px-4 py-2 text-sm font-bold text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
-            >
-              GeoJSONをダウンロード
-            </button>
-          </div>
+        <div className="mt-2">
+          <h2 className="text-2xl font-bold text-slate-900">
+            集まった地域データを活用する
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            何に活用するかを決め、分析する範囲を選ぶと、その条件に沿ってAIが地域データを読み解きます。
+            最後に、分析結果をそのまま共有できるレポートとして持ち帰れます。
+          </p>
         </div>
 
-        <div className="mt-5 grid gap-2 md:grid-cols-4">
+        <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {[
-            ["1", "条件を決める", "範囲と利用目的を選ぶ"],
-            ["2", "AIで読み解く", "発見・注意点・次の行動を見る"],
-            ["3", "持ち帰る", "1枚レポートとしてコピーする"],
-            ["4", "根拠を見る", "タグ・ギャップ・近接関係を確認する"],
+            ["1", "目的を決める", "データの使い道を選ぶ"],
+            ["2", "範囲を決める", "地図内または全件を選ぶ"],
+            ["3", "充実度を見る", "分析の前提を確かめる"],
+            ["4", "AIで分析する", "目的に沿った結果を見る"],
+            ["5", "レポート出力", "結果を共有・再利用する"],
           ].map(([step, title, description]) => (
             <div
               key={step}
@@ -954,55 +936,13 @@ export function DataUsePanel({
           ))}
         </div>
 
-        <div className="mt-5 rounded-2xl bg-slate-50 p-2">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setScope("visible")}
-              className={`rounded-xl px-4 py-3 text-left transition ${
-                scope === "visible"
-                  ? "bg-white text-primary shadow-sm"
-                  : "text-slate-600 hover:bg-white/70"
-              }`}
-            >
-              <span className="block text-sm font-bold">表示範囲で集計</span>
-              <span className="mt-1 block text-xs">
-                いま地図で読み込んでいる範囲を見る
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setScope("all")}
-              className={`rounded-xl px-4 py-3 text-left transition ${
-                scope === "all"
-                  ? "bg-white text-primary shadow-sm"
-                  : "text-slate-600 hover:bg-white/70"
-              }`}
-            >
-              <span className="block text-sm font-bold">全件データで集計</span>
-              <span className="mt-1 block text-xs">
-                投稿と行政データを全体傾向として見る
-              </span>
-            </button>
-          </div>
-          {isLoadingAllData ? (
-            <p className="mt-2 px-2 text-xs text-slate-500">
-              全件データを読み込んでいます…
-            </p>
-          ) : null}
-          {allDataError ? (
-            <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">
-              {allDataError}
-            </p>
-          ) : null}
-        </div>
       </div>
 
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Analysis purpose
+              STEP 1 / PURPOSE
             </p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">
               利用目的を選ぶ
@@ -1048,60 +988,77 @@ export function DataUsePanel({
                 </div>
 
                 {isActive ? (
-                  <p className="mt-3 text-sm leading-6 text-slate-700">
-                    {story.scenario}
-                  </p>
+                  <div className="mt-3 space-y-3">
+                    <p className="text-sm leading-6 text-slate-700">
+                      {story.scenario}
+                    </p>
+                    <p className="rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-slate-700">
+                      次の一手: {story.nextStep}
+                    </p>
+                  </div>
                 ) : null}
-
-                <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-slate-700">
-                  次の一手: {story.nextStep}
-                </p>
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-          <p className="text-sm font-semibold text-slate-500">
-            市民投稿（{activeScopeLabel}）
-          </p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">
-            {activePosts.length.toLocaleString("ja-JP")}件
-          </p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            地域の気づきとして蓄積された投稿数です。
-          </p>
-        </div>
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-          <p className="text-sm font-semibold text-slate-500">
-            行政オープンデータ
-          </p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">
-            {activeVisibleSeedCount.toLocaleString("ja-JP")}件
-          </p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            全{activeSeedCount.toLocaleString("ja-JP")}件のうち、集計対象の件数です。
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              STEP 2 / AREA
+            </p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              分析表示範囲を選ぶ
+            </h3>
+          </div>
+          <p className="max-w-2xl text-sm leading-6 text-slate-600">
+            地図で見ている地域だけを調べるか、蓄積された全データの傾向を見るかを選びます。
           </p>
         </div>
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-          <p className="text-sm font-semibold text-slate-500">公開再利用向け</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">
-            {ccByPostCount.toLocaleString("ja-JP")}件
-          </p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            CC BY 4.0として扱える市民投稿です。
-          </p>
-        </div>
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-          <p className="text-sm font-semibold text-slate-500">タグ種類</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">
-            {uniqueTagCount.toLocaleString("ja-JP")}種
-          </p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            うち都市体験タグは{urbanExperienceTagCount.toLocaleString("ja-JP")}種です。
-          </p>
+
+        <div className="mt-4 rounded-2xl bg-slate-50 p-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setScope("visible")}
+              className={`rounded-xl px-4 py-3 text-left transition ${
+                scope === "visible"
+                  ? "bg-white text-primary shadow-sm ring-1 ring-primary/15"
+                  : "text-slate-600 hover:bg-white/70"
+              }`}
+            >
+              <span className="block text-sm font-bold">表示範囲で分析</span>
+              <span className="mt-1 block text-xs leading-5">
+                いま地図に表示している地域を詳しく見る
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope("all")}
+              className={`rounded-xl px-4 py-3 text-left transition ${
+                scope === "all"
+                  ? "bg-white text-primary shadow-sm ring-1 ring-primary/15"
+                  : "text-slate-600 hover:bg-white/70"
+              }`}
+            >
+              <span className="block text-sm font-bold">全件データで分析</span>
+              <span className="mt-1 block text-xs leading-5">
+                投稿と行政データをプラットフォーム全体で見る
+              </span>
+            </button>
+          </div>
+          {isLoadingAllData ? (
+            <p className="mt-2 px-2 text-xs text-slate-500">
+              全件データを読み込んでいます…
+            </p>
+          ) : null}
+          {allDataError ? (
+            <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {allDataError}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -1109,7 +1066,7 @@ export function DataUsePanel({
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">
-              Data readiness
+              STEP 3 / DATA READINESS
             </p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">
               AI分析に向けたデータ充実度
@@ -1126,6 +1083,23 @@ export function DataUsePanel({
               {dataReadinessScore}%
             </p>
           </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ["市民投稿", `${activePosts.length.toLocaleString("ja-JP")}件`],
+            ["行政オープンデータ", `${activeVisibleSeedCount.toLocaleString("ja-JP")}件`],
+            ["公開再利用向け", `${ccByPostCount.toLocaleString("ja-JP")}件`],
+            ["タグ種類", `${uniqueTagCount.toLocaleString("ja-JP")}種`],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-3"
+            >
+              <p className="text-xs font-bold text-sky-700">{label}</p>
+              <p className="mt-1 text-xl font-black text-slate-900">{value}</p>
+            </div>
+          ))}
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-5">
@@ -1164,13 +1138,13 @@ export function DataUsePanel({
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600">
-              AI regional insight
+              STEP 4 / AI ANALYSIS
             </p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">
-              AI地域インサイト
+              {selectedUseCaseStory.eyebrow}のためのAI地域インサイト
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              {activeScopeLabel}の市民投稿・行政オープンデータ・タグ傾向・ギャップ候補をもとに、地域の特徴や活用ヒントを短く整理します。
+              {activeScopeLabel}の市民投稿・行政オープンデータ・タグ傾向・ギャップ候補をもとに、選択した利用目的に必要な発見と次の行動を整理します。
             </p>
           </div>
           <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
@@ -1206,29 +1180,16 @@ export function DataUsePanel({
           </p>
         ) : null}
 
-        <div className="mt-5 rounded-2xl bg-slate-50 p-2">
-          <p className="px-2 py-1 text-xs font-bold text-slate-500">
-            AIの分析視点
-          </p>
-          <div className="mt-1 grid gap-2 md:grid-cols-3">
-            {insightLensOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setInsightLens(option.value)}
-                className={`rounded-xl px-3 py-3 text-left transition ${
-                  insightLens === option.value
-                    ? "bg-white text-violet-700 shadow-sm ring-1 ring-violet-200"
-                    : "text-slate-600 hover:bg-white/70"
-                }`}
-              >
-                <span className="block text-sm font-bold">{option.label}</span>
-                <span className="mt-1 block text-xs leading-5">
-                  {option.description}
-                </span>
-              </button>
-            ))}
+        <div className="mt-5 flex flex-col gap-2 rounded-2xl bg-violet-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold text-violet-700">選択中の利用目的</p>
+            <p className="mt-1 text-sm font-bold text-slate-900">
+              {selectedUseCaseStory.eyebrow} — {selectedUseCaseStory.title}
+            </p>
           </div>
+          <p className="text-xs leading-5 text-slate-600">
+            目的を変える場合は、上の「利用目的を選ぶ」から選び直してください。
+          </p>
         </div>
 
         {regionalInsight ? (
@@ -1240,30 +1201,14 @@ export function DataUsePanel({
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   ["分析範囲", activeScopeLabel],
-                  [
-                    "分析視点",
-                    insightLensOptions.find(
-                      (option) => option.value === regionalInsight.lens,
-                    )?.label ?? "自治体施策",
-                  ],
+                  ["利用目的", selectedUseCaseStory.eyebrow],
                   [
                     "投稿 / 行政データ",
                     `${activePosts.length.toLocaleString("ja-JP")}件 / ${activeVisibleSeedCount.toLocaleString("ja-JP")}件`,
                   ],
-                  ["上位タグ", topTagSummary],
-                  [
-                    "都市体験タグ",
-                    `${urbanExperienceTagCount.toLocaleString("ja-JP")}種 / ${urbanExperienceTaggedPostCount.toLocaleString("ja-JP")}投稿`,
-                  ],
-                  ["CC BY率", `${ccByRate}%`],
-                  ["行政データとの近さ", nearestDistanceSummary],
                   [
                     "データ充実度",
                     `${dataReadinessScore}%（${dataReadinessLabel}）`,
-                  ],
-                  [
-                    "ギャップ候補",
-                    `${adminGapCount + civicDiscoveryCount}件`,
                   ],
                 ].map(([label, value]) => (
                   <div
@@ -1329,26 +1274,29 @@ export function DataUsePanel({
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              {[
-                ["この地域の特徴", regionalInsight.overview],
-                ["市民投稿から見える魅力", regionalInsight.civicSignals],
-                ["行政データとのギャップ", regionalInsight.adminGap],
-                ["活用・改善のヒント", regionalInsight.actionHint],
-                ["次に集めたい投稿テーマ", regionalInsight.collectionTheme],
-                ["データ品質・再利用性メモ", regionalInsight.dataQualityNote],
-              ].map(([label, text]) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4"
-                >
-                  <p className="text-xs font-bold text-violet-700">{label}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-700">
-                    {text}
-                  </p>
-                </div>
-              ))}
-            </div>
+            <details className="rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+              <summary className="cursor-pointer text-sm font-bold text-violet-800">
+                分析の補足を見る
+              </summary>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {[
+                  ["市民投稿から見える魅力", regionalInsight.civicSignals],
+                  ["行政データとのギャップ", regionalInsight.adminGap],
+                  ["活用・改善のヒント", regionalInsight.actionHint],
+                  ["データ品質・再利用性メモ", regionalInsight.dataQualityNote],
+                ].map(([label, text]) => (
+                  <div
+                    key={label}
+                    className="rounded-2xl border border-violet-100 bg-white p-4"
+                  >
+                    <p className="text-xs font-bold text-violet-700">{label}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">
+                      {text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </details>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
@@ -1431,10 +1379,10 @@ export function DataUsePanel({
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">
-              One page report
+              STEP 5 / REPORT
             </p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">
-              データ活用レポートを作成
+              分析レポートを出力
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               利用者視点、集計サマリー、地域の発見、ギャップ、次に集めたい投稿、活用アイデアを1枚のレポートにまとめます。
@@ -1445,14 +1393,16 @@ export function DataUsePanel({
             <button
               type="button"
               onClick={() => setShowDataUseReport((current) => !current)}
-              className="w-full rounded-full bg-teal-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700 md:w-auto"
+              disabled={!regionalInsight}
+              className="w-full rounded-full bg-teal-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-300 md:w-auto"
             >
               {showDataUseReport ? "レポートを閉じる" : "レポートを表示"}
             </button>
             <button
               type="button"
               onClick={handleCopyDataUseReport}
-              className="w-full rounded-full border border-teal-200 bg-white px-4 py-2 text-sm font-bold text-teal-700 transition hover:bg-teal-50 md:w-auto"
+              disabled={!regionalInsight}
+              className="w-full rounded-full border border-teal-200 bg-white px-4 py-2 text-sm font-bold text-teal-700 transition hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 md:w-auto"
             >
               レポートをコピー
             </button>
@@ -1499,9 +1449,38 @@ export function DataUsePanel({
           </div>
         ) : (
           <p className="mt-4 rounded-2xl bg-teal-50 px-4 py-3 text-sm leading-6 text-teal-900">
-            デモでは、投稿・行政データ・AI分析が「会議や地域活動に持ち帰れるレポート」へ変わるところを見せられます。
+            {regionalInsight
+              ? "レポートを表示すると、分析結果を1枚のMarkdownとして確認できます。"
+              : "先にAI地域インサイトを生成すると、その分析結果をレポートとして表示・コピーできます。"}
           </p>
         )}
+
+        <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <summary className="cursor-pointer text-sm font-bold text-slate-700">
+            分析元データを書き出す
+          </summary>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            選択中の分析範囲に含まれる市民投稿を、再利用しやすい形式で保存します。
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadCsv}
+              disabled={activePosts.length === 0}
+              className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary-strong disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              CSVをダウンロード
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadGeoJson}
+              disabled={activePosts.length === 0}
+              className="rounded-full border border-primary/30 bg-white px-4 py-2 text-sm font-bold text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+            >
+              GeoJSONをダウンロード
+            </button>
+          </div>
+        </details>
       </div>
 
       <details className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm shadow-amber-100/70">
