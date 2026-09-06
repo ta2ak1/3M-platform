@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  fetchAdminPlaces,
   fetchAiAnalysisLogs,
-  fetchPosts,
   fetchRegionalInsight,
 } from "../lib/api";
 import {
@@ -44,7 +42,6 @@ type GapCandidate =
       distanceMeters?: number;
     };
 
-type InsightScope = "visible" | "all";
 type InsightLens = "policy" | "tourism" | "community";
 
 type CollectionCampaignSuggestion = {
@@ -119,11 +116,6 @@ const useCaseStories: {
     tone: "border-sky-200 bg-sky-50/70 text-sky-800",
   },
 ];
-
-const ALL_DATA_LIMIT = 10000;
-const ALL_POST_LIMIT = 1000;
-const EMPTY_COMMUNITY_POSTS: CommunityPost[] = [];
-const EMPTY_ADMIN_PLACES: AdminPlace[] = [];
 
 function getPostTags(post: CommunityPost) {
   return post.humanTags ?? post.tags ?? [];
@@ -253,15 +245,7 @@ export function DataUsePanel({
   seedCount,
   visibleSeedCount,
 }: DataUsePanelProps) {
-  const [scope, setScope] = useState<InsightScope>("visible");
   const [insightLens, setInsightLens] = useState<InsightLens>("policy");
-  const [allPosts, setAllPosts] = useState<CommunityPost[] | null>(null);
-  const [allAdminPlaces, setAllAdminPlaces] = useState<AdminPlace[] | null>(
-    null,
-  );
-  const [allSeedCount, setAllSeedCount] = useState<number | null>(null);
-  const [isLoadingAllData, setIsLoadingAllData] = useState(false);
-  const [allDataError, setAllDataError] = useState<string | null>(null);
   const [regionalInsight, setRegionalInsight] =
     useState<RegionalInsight | null>(null);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
@@ -271,54 +255,6 @@ export function DataUsePanel({
   const [analysisLogs, setAnalysisLogs] = useState<AiAnalysisLog[]>([]);
   const [isLoadingAnalysisLogs, setIsLoadingAnalysisLogs] = useState(false);
   const [analysisLogError, setAnalysisLogError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (
-      scope !== "all" ||
-      (allPosts != null && allAdminPlaces != null) ||
-      isLoadingAllData
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadAllData = async () => {
-      setIsLoadingAllData(true);
-      setAllDataError(null);
-
-      try {
-        const [nextPosts, nextAdminPlacesResponse] = await Promise.all([
-          fetchPosts(undefined, { limit: ALL_POST_LIMIT }),
-          fetchAdminPlaces(undefined, { limit: ALL_DATA_LIMIT }),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        setAllPosts(nextPosts);
-        setAllAdminPlaces(nextAdminPlacesResponse.places);
-        setAllSeedCount(nextAdminPlacesResponse.count);
-      } catch {
-        if (!cancelled) {
-          setAllDataError(
-            "全件データの取得に失敗しました。表示範囲のデータで確認してください。",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingAllData(false);
-        }
-      }
-    };
-
-    void loadAllData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [allAdminPlaces, allPosts, isLoadingAllData, scope]);
 
   const loadAnalysisLogs = async () => {
     setIsLoadingAnalysisLogs(true);
@@ -338,22 +274,11 @@ export function DataUsePanel({
     void loadAnalysisLogs();
   }, []);
 
-  const hasAllData = allPosts != null && allAdminPlaces != null;
-  const isAllScopeSelected = scope === "all";
-  const isSelectedScopeLoading =
-    isAllScopeSelected && !hasAllData && isLoadingAllData;
-  const canAnalyzeSelectedScope = !isAllScopeSelected || hasAllData;
-  const usesAllData = isAllScopeSelected && hasAllData;
-  const activePosts = isAllScopeSelected
-    ? (allPosts ?? EMPTY_COMMUNITY_POSTS)
-    : posts;
-  const activeAdminPlaces = isAllScopeSelected
-    ? (allAdminPlaces ?? EMPTY_ADMIN_PLACES)
-    : adminPlaces;
-  const activeSeedCount = usesAllData ? (allSeedCount ?? seedCount) : seedCount;
-  const activeVisibleSeedCount =
-    isAllScopeSelected ? (allAdminPlaces?.length ?? 0) : visibleSeedCount;
-  const activeScopeLabel = isAllScopeSelected ? "全件データ" : "表示範囲";
+  const activePosts = posts;
+  const activeAdminPlaces = adminPlaces;
+  const activeSeedCount = seedCount;
+  const activeVisibleSeedCount = visibleSeedCount;
+  const activeScopeLabel = "現在の表示範囲";
 
   const tagRanking = useMemo(() => {
     const tagCounts = new Map<string, number>();
@@ -565,9 +490,8 @@ export function DataUsePanel({
       dataReadinessChecks.length) *
       100,
   );
-  const dataReadinessLabel = isSelectedScopeLoading
-    ? "読み込み中"
-    : dataReadinessScore >= 80
+  const dataReadinessLabel =
+    dataReadinessScore >= 80
       ? "活用しやすい"
       : dataReadinessScore >= 50
         ? "育成中"
@@ -689,19 +613,12 @@ export function DataUsePanel({
   ]);
 
   const handleGenerateRegionalInsight = async () => {
-    if (!canAnalyzeSelectedScope) {
-      setInsightError(
-        "全件データの読み込みが完了してからAI地域インサイトを生成してください。",
-      );
-      return;
-    }
-
     setIsGeneratingInsight(true);
     setInsightError(null);
 
     try {
       const insight = await fetchRegionalInsight({
-        scope: usesAllData ? "all" : "visible",
+        scope: "visible",
         lens: insightLens,
         posts: activePosts,
         adminPlaces: activeAdminPlaces,
@@ -928,18 +845,17 @@ export function DataUsePanel({
             集まった地域データを活用する
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            何に活用するかを決め、分析する範囲を選ぶと、その条件に沿ってAIが地域データを読み解きます。
+            何に活用するかを決めると、地図で表示している範囲に沿ってAIが地域データを読み解きます。
             最後に、分析結果をそのまま共有できるレポートとして持ち帰れます。
           </p>
         </div>
 
-        <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["1", "目的を決める", "データの使い道を選ぶ"],
-            ["2", "範囲を決める", "地図内または全件を選ぶ"],
-            ["3", "充実度を見る", "分析の前提を確かめる"],
-            ["4", "AIで分析する", "目的に沿った結果を見る"],
-            ["5", "レポート出力", "結果を共有・再利用する"],
+            ["2", "充実度を見る", "表示範囲の前提を確かめる"],
+            ["3", "AIで分析する", "目的に沿った結果を見る"],
+            ["4", "レポート出力", "結果を共有・再利用する"],
           ].map(([step, title, description]) => (
             <div
               key={step}
@@ -1021,76 +937,17 @@ export function DataUsePanel({
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              STEP 2 / AREA
-            </p>
-            <h3 className="mt-1 text-lg font-bold text-slate-900">
-              分析表示範囲を選ぶ
-            </h3>
-          </div>
-          <p className="max-w-2xl text-sm leading-6 text-slate-600">
-            地図で見ている地域だけを調べるか、蓄積された全データの傾向を見るかを選びます。
-          </p>
-        </div>
-
-        <div className="mt-4 rounded-2xl bg-slate-50 p-2">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setScope("visible")}
-              className={`rounded-xl px-4 py-3 text-left transition ${
-                scope === "visible"
-                  ? "bg-white text-primary shadow-sm ring-1 ring-primary/15"
-                  : "text-slate-600 hover:bg-white/70"
-              }`}
-            >
-              <span className="block text-sm font-bold">表示範囲で分析</span>
-              <span className="mt-1 block text-xs leading-5">
-                いま地図に表示している地域を詳しく見る
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setScope("all")}
-              className={`rounded-xl px-4 py-3 text-left transition ${
-                scope === "all"
-                  ? "bg-white text-primary shadow-sm ring-1 ring-primary/15"
-                  : "text-slate-600 hover:bg-white/70"
-              }`}
-            >
-              <span className="block text-sm font-bold">全件データで分析</span>
-              <span className="mt-1 block text-xs leading-5">
-                投稿と行政データをプラットフォーム全体で見る
-              </span>
-            </button>
-          </div>
-          {isLoadingAllData ? (
-            <p className="mt-2 px-2 text-xs text-slate-500">
-              全件データを読み込んでいます…
-            </p>
-          ) : null}
-          {allDataError ? (
-            <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">
-              {allDataError}
-            </p>
-          ) : null}
-        </div>
-      </div>
-
       <div className="rounded-3xl border border-sky-200 bg-white p-5 shadow-sm shadow-sky-100/70">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">
-              STEP 3 / DATA READINESS
+              STEP 2 / DATA READINESS
             </p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">
               AI分析に向けたデータ充実度
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              AI地域インサイトの前提になる投稿数・タグ・行政データとの関係・再利用性を確認します。
+              地図で表示している範囲について、AI地域インサイトの前提になる投稿数・タグ・行政データとの関係・再利用性を確認します。
             </p>
           </div>
           <div className="rounded-2xl bg-sky-50 px-5 py-4 text-center">
@@ -1156,7 +1013,7 @@ export function DataUsePanel({
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600">
-              STEP 4 / AI ANALYSIS
+              STEP 3 / AI ANALYSIS
             </p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">
               {selectedUseCaseStory.eyebrow}のためのAI地域インサイト
@@ -1169,14 +1026,10 @@ export function DataUsePanel({
             <button
               type="button"
               onClick={handleGenerateRegionalInsight}
-              disabled={isGeneratingInsight || !canAnalyzeSelectedScope}
+              disabled={isGeneratingInsight}
               className="w-full rounded-full bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300 md:w-auto"
             >
-              {isGeneratingInsight
-                ? "AI分析中..."
-                : isSelectedScopeLoading
-                  ? "全件データを読み込み中..."
-                  : "AIで地域を読み解く"}
+              {isGeneratingInsight ? "AI分析中..." : "AIで地域を読み解く"}
             </button>
             {regionalInsight ? (
               <button
@@ -1401,7 +1254,7 @@ export function DataUsePanel({
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">
-              STEP 5 / REPORT
+              STEP 4 / REPORT
             </p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">
               分析レポートを出力
