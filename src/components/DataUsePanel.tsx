@@ -122,6 +122,8 @@ const useCaseStories: {
 
 const ALL_DATA_LIMIT = 10000;
 const ALL_POST_LIMIT = 1000;
+const EMPTY_COMMUNITY_POSTS: CommunityPost[] = [];
+const EMPTY_ADMIN_PLACES: AdminPlace[] = [];
 
 function getPostTags(post: CommunityPost) {
   return post.humanTags ?? post.tags ?? [];
@@ -337,13 +339,21 @@ export function DataUsePanel({
   }, []);
 
   const hasAllData = allPosts != null && allAdminPlaces != null;
-  const usesAllData = scope === "all" && hasAllData;
-  const activePosts = usesAllData ? allPosts : posts;
-  const activeAdminPlaces = usesAllData ? allAdminPlaces : adminPlaces;
+  const isAllScopeSelected = scope === "all";
+  const isSelectedScopeLoading =
+    isAllScopeSelected && !hasAllData && isLoadingAllData;
+  const canAnalyzeSelectedScope = !isAllScopeSelected || hasAllData;
+  const usesAllData = isAllScopeSelected && hasAllData;
+  const activePosts = isAllScopeSelected
+    ? (allPosts ?? EMPTY_COMMUNITY_POSTS)
+    : posts;
+  const activeAdminPlaces = isAllScopeSelected
+    ? (allAdminPlaces ?? EMPTY_ADMIN_PLACES)
+    : adminPlaces;
   const activeSeedCount = usesAllData ? (allSeedCount ?? seedCount) : seedCount;
   const activeVisibleSeedCount =
-    usesAllData ? allAdminPlaces.length : visibleSeedCount;
-  const activeScopeLabel = usesAllData ? "全件データ" : "表示範囲";
+    isAllScopeSelected ? (allAdminPlaces?.length ?? 0) : visibleSeedCount;
+  const activeScopeLabel = isAllScopeSelected ? "全件データ" : "表示範囲";
 
   const tagRanking = useMemo(() => {
     const tagCounts = new Map<string, number>();
@@ -555,8 +565,9 @@ export function DataUsePanel({
       dataReadinessChecks.length) *
       100,
   );
-  const dataReadinessLabel =
-    dataReadinessScore >= 80
+  const dataReadinessLabel = isSelectedScopeLoading
+    ? "読み込み中"
+    : dataReadinessScore >= 80
       ? "活用しやすい"
       : dataReadinessScore >= 50
         ? "育成中"
@@ -678,6 +689,13 @@ export function DataUsePanel({
   ]);
 
   const handleGenerateRegionalInsight = async () => {
+    if (!canAnalyzeSelectedScope) {
+      setInsightError(
+        "全件データの読み込みが完了してからAI地域インサイトを生成してください。",
+      );
+      return;
+    }
+
     setIsGeneratingInsight(true);
     setInsightError(null);
 
@@ -1151,10 +1169,14 @@ export function DataUsePanel({
             <button
               type="button"
               onClick={handleGenerateRegionalInsight}
-              disabled={isGeneratingInsight || isLoadingAllData}
+              disabled={isGeneratingInsight || !canAnalyzeSelectedScope}
               className="w-full rounded-full bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300 md:w-auto"
             >
-              {isGeneratingInsight ? "AI分析中..." : "AIで地域を読み解く"}
+              {isGeneratingInsight
+                ? "AI分析中..."
+                : isSelectedScopeLoading
+                  ? "全件データを読み込み中..."
+                  : "AIで地域を読み解く"}
             </button>
             {regionalInsight ? (
               <button
@@ -1393,7 +1415,6 @@ export function DataUsePanel({
             <button
               type="button"
               onClick={() => setShowDataUseReport((current) => !current)}
-              disabled={!regionalInsight}
               className="w-full rounded-full bg-teal-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-300 md:w-auto"
             >
               {showDataUseReport ? "レポートを閉じる" : "レポートを表示"}
@@ -1401,7 +1422,6 @@ export function DataUsePanel({
             <button
               type="button"
               onClick={handleCopyDataUseReport}
-              disabled={!regionalInsight}
               className="w-full rounded-full border border-teal-200 bg-white px-4 py-2 text-sm font-bold text-teal-700 transition hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 md:w-auto"
             >
               レポートをコピー
